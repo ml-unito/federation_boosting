@@ -4,7 +4,7 @@
 
 # Federated Adaboost
 
-Currently, the program tests Distboost and Preweak [1] and compare their performance with a standard Adaboost (scikit-learn implementation + custom implementation).
+Currently, the program tests Distboost and Preweak [[1]](#1) and compare their performance with a standard Adaboost (scikit-learn implementation + custom implementation).
 
 ## Requirements
 Install the requirements through PyPi using the following command:
