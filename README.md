@@ -4,7 +4,7 @@
 
 # Federated Adaboost
 
-Currently, the program tests Distboost and Preweak [1] and compare their performance with a standard Adaboost (scikit-learn implementation + custom implementation).
+Currently, the program tests Distboost and Preweak [[1]](#1) and compare their performance with a standard Adaboost (scikit-learn implementation + custom implementation).
 
 ## Requirements
 Install the requirements through PyPi using the following command:
@@ -31,7 +31,7 @@ Options:
     Whether the results has to be saved on a JSON file - default=False
 
 
-**Supported dataset**: breast, mnistXY, sonar, ionospehere, banknote, spambase, particle, and forestcover12. Note that mnistXY is a binary classification subset of MNIST in which X is a digit and Y is another digit with X,Y in {0, 1, ..., 9. The `test_size` argument is ignored for the mnist, particle and the forestcover12
+**Supported datasets**: breast, mnistXY, sonar, ionospehere, banknote, spambase, particle, and forestcover12. Note that mnistXY is a binary classification subset of MNIST in which X is a digit and Y is another digit with X,Y in {0, 1, ..., 9}. The `test_size` argument is ignored for the mnist, particle and the forestcover12
 datasets for which it is used a default split size. The dataset can be also a path to a svmlight file.
 
 ## References
