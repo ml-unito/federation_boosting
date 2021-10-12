@@ -24,6 +24,8 @@ import urllib.request as ureq
 import json
 import gzip
 
+import wandb
+
 
 def manage_options() -> Dict[str, Any]:
     parser = OptionParser(usage="usage: %prog [options] dataset",
@@ -346,8 +348,13 @@ class Preweak():
 
 
 if __name__ == "__main__":
+    
+
     options: Dict[str, Any] = manage_options()
     print("Configuration:\n", json.dumps(vars(options), indent=4, sort_keys=True))
+
+    wandb.init(project='FederatedAdaboost', entity='mlgroup', config=options)
+
 
     DATASET: str = options.dataset
     TEST_SIZE: float = options.test_size
@@ -357,7 +364,7 @@ if __name__ == "__main__":
     OUTPUT_FILE: bool = options.output_file
 
     WEAK_LEARNER = DecisionTreeClassifier(random_state=SEED, max_depth=3)
-    N_ESTIMATORS: List[int] = [1, 25, 50, 100, 150, 200, 300]
+    N_ESTIMATORS: List[int] = list(range(1,300,10))
     MODEL_NAMES: List[str] = ["adaboost", "my_ada", "distboost", "preweak"]
     METRICS = ["accuracy", "precision", "recall", "f1"]
 
@@ -372,8 +379,9 @@ if __name__ == "__main__":
     X_tr, y_tr = split_dataset(X_train, y_train, N_CLIENTS, seed=SEED)
 
     print("Training...")
-    pbar = tqdm.tqdm(N_ESTIMATORS)
-    for ne in pbar:
+    for ne in N_ESTIMATORS:
+        print("N_ESTIMATORS:%d" %ne)
+
         models = {
             "adaboost"  : lambda: AdaBoostClassifier(base_estimator=WEAK_LEARNER,
                                                      n_estimators=ne,
@@ -384,26 +392,16 @@ if __name__ == "__main__":
         }
 
         for k in models:
-            pbar.set_postfix({"clf": k})
-            pbar.refresh()
             models[k] = models[k]()
             y_pred = models[k].predict(X_test)
-            results[k]["accuracy"].append(accuracy_score(y_test, y_pred))
-            results[k]["precision"].append(precision_score(y_test, y_pred))
-            results[k]["recall"].append(recall_score(y_test, y_pred))
-            results[k]["f1"].append(f1_score(y_test, y_pred))
 
-    print(json.dumps(results, indent=4, sort_keys=True))
-    if OUTPUT_FILE:
-        filename = "fed_ada_s%d_n%d_%s%s.json" %(SEED, N_CLIENTS, DATASET, "_z" if NORMALIZE else "")
-        with open(filename, "w") as f:
-            json.dump(results, f, indent=4, sort_keys=True)
-    else:
-        for m in METRICS:
-            for k in results:
-                plt.plot(N_ESTIMATORS, results[k][m], label=k)
-            plt.title("%s - %s" %(DATASET, m))
-            plt.legend()
-            plt.show()
+            wandb.log(
+                {
+                    "n_estimators" : ne,
+                    k+"_accuracy": accuracy_score(y_test, y_pred), 
+                    k+"_precision": precision_score(y_test, y_pred),
+                    k+"_recall": recall_score(y_test, y_pred),
+                    k+"_f1": f1_score(y_test, y_pred)
+                })
 
 
