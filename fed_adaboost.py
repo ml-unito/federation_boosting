@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import division, print_function, annotations
 import os
-import sys
-from typing import Any, Tuple, Union, Dict, List
+from typing import Any, Tuple, Dict, List
 from copy import deepcopy
-from math import log, exp
+from math import log
 import tqdm
 import pandas as pd
 import numpy as np
@@ -46,6 +45,10 @@ def manage_options() -> Dict[str, Any]:
     parser.add_option("-n", "--nclients",
                       dest="n_clients", default=10, type="int",
                       help="Number of clients (>= 1) - default=10")
+    parser.add_option("-m", "--model",
+                      dest="model", default="adaboost", type="str",
+                      help="The model to train and test. Supported models: adaboost, my_ada, "\
+                           "distboost and preweak - default=adaboost")
     parser.add_option("-z", "--normalize",
                       dest="normalize", default=False, action="store_true",
                       help="Whether the instances has to be normalized or not - default=False")
@@ -53,6 +56,9 @@ def manage_options() -> Dict[str, Any]:
                       dest="output_file", default=False, action="store_true",
                       help="Whether the results has to be saved on a JSON file - default=False")
     (options, args) = parser.parse_args()
+    if len(args) < 1:
+        print("Dataset argument missing. Please check the documentation: `python fed_adaboost.py -h`")
+        exit(0)
     options.dataset = args[0]
     return options
 
@@ -157,7 +163,6 @@ def load_binary_classification_dataset(name_or_path: str,
         y_train = y_train[ids_tr].astype(int)
         X_test = X_test[ids_te, :]
         y_test = y_test[ids_te].astype(int)
-        print(y_train, y_test)
         y_train[np.where(y_train == d1)] = -1
         y_train[np.where(y_train == d2)] = 1
         y_test[np.where(y_test == d1)] = -1
@@ -190,17 +195,17 @@ def load_binary_classification_dataset(name_or_path: str,
     return X_train, X_test, y_train, y_test
 
 
+# Given the number of clients, the splitting is deterministic.
+# However, if the dataset has been shuffled it is ok.
 def split_dataset(X: np.ndarray,
                   y: np.ndarray,
-                  n: int,
-                  seed: int=42) -> Tuple[np.ndarray, np.ndarray]:
+                  n: int) -> Tuple[np.ndarray, np.ndarray]:
     if n > X.shape[0]:
         raise ValueError("# of users must be <= than the # of examples in the training set.")
     
     tot = X.shape[0]
     X_tr = [X[list(range(i, tot, n)), :] for i in range(n)]
     y_tr = [y[list(range(i, tot, n))] for i in range(n)]
-
     return X_tr, y_tr
 
 
@@ -349,23 +354,23 @@ class Preweak():
 
 if __name__ == "__main__":
     
-
+    MODEL_NAMES: List[str] = ["adaboost", "my_ada", "distboost", "preweak"]
     options: Dict[str, Any] = manage_options()
     print("Configuration:\n", json.dumps(vars(options), indent=4, sort_keys=True))
+    assert options.model in MODEL_NAMES, "Model %s not supported!" %options.model
 
     wandb.init(project='FederatedAdaboost', entity='mlgroup', config=options)
-
 
     DATASET: str = options.dataset
     TEST_SIZE: float = options.test_size
     NORMALIZE: bool = options.normalize
     N_CLIENTS: int = options.n_clients
     SEED: int = options.seed
-    OUTPUT_FILE: bool = options.output_file
+    OUTPUT_FILE: bool = options.output_file #unused
+    MODEL: str = options.model
 
     WEAK_LEARNER = DecisionTreeClassifier(random_state=SEED, max_depth=3)
-    N_ESTIMATORS: List[int] = list(range(1,300,10))
-    MODEL_NAMES: List[str] = ["adaboost", "my_ada", "distboost", "preweak"]
+    N_ESTIMATORS: List[int] = [1] + list(range(10, 300, 10))
     METRICS = ["accuracy", "precision", "recall", "f1"]
 
     X_train, X_test, y_train, y_test = load_binary_classification_dataset(name_or_path=DATASET,
@@ -375,33 +380,31 @@ if __name__ == "__main__":
     print("# weak learners: %s" %N_ESTIMATORS)
     print("Training set size: %d" %X_train.shape[0])
     print("Test set size: %d" %X_test.shape[0])
-    results: Dict[str, List[float]] = {k: {m : [] for m in METRICS} for k in MODEL_NAMES}
-    X_tr, y_tr = split_dataset(X_train, y_train, N_CLIENTS, seed=SEED)
+    X_tr, y_tr = split_dataset(X_train, y_train, N_CLIENTS)
 
     print("Training...")
     for ne in N_ESTIMATORS:
         print("N_ESTIMATORS:%d" %ne)
 
-        models = {
-            "adaboost"  : lambda: AdaBoostClassifier(base_estimator=WEAK_LEARNER,
-                                                     n_estimators=ne,
-                                                     random_state=SEED).fit(X_train, y_train),  # sklearn adaboost implementation
-            "my_ada"    : lambda: Adaboost(ne, WEAK_LEARNER).fit(X_train, y_train),             # my adaboost implementation
-            "distboost" : lambda: Distboost(ne, WEAK_LEARNER).fit(X_tr, y_tr),                  # distboost according to J. Cooper et al. "Improved Algorithms for Distributed Boosting", 2017
-            "preweak"   : lambda: Preweak(ne, WEAK_LEARNER).fit(X_tr, y_tr)                     # preweak according to J. Cooper et al. "Improved Algorithms for Distributed Boosting", 2017
-        }
+        if MODEL == "adaboost": 
+            model = AdaBoostClassifier(base_estimator=WEAK_LEARNER,
+                                       n_estimators=ne,
+                                       random_state=SEED).fit(X_train, y_train)
+        elif MODEL == "my_ada": 
+            model = Adaboost(ne, WEAK_LEARNER).fit(X_train, y_train)
+        elif MODEL == "distboost":
+            model = Distboost(ne, WEAK_LEARNER).fit(X_tr, y_tr)
+        else: #MODEL == "preweak"
+            model = Preweak(ne, WEAK_LEARNER).fit(X_tr, y_tr)
 
-        for k in models:
-            models[k] = models[k]()
-            y_pred = models[k].predict(X_test)
+        y_pred = model.predict(X_test)
 
-            wandb.log(
-                {
-                    "n_estimators" : ne,
-                    k+"_accuracy": accuracy_score(y_test, y_pred), 
-                    k+"_precision": precision_score(y_test, y_pred),
-                    k+"_recall": recall_score(y_test, y_pred),
-                    k+"_f1": f1_score(y_test, y_pred)
-                })
+        wandb.log({
+                "n_estimators" : ne,
+                "accuracy": accuracy_score(y_test, y_pred), 
+                "precision": precision_score(y_test, y_pred),
+                "recall": recall_score(y_test, y_pred),
+                "f1": f1_score(y_test, y_pred)
+            })
 
 
