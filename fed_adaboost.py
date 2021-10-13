@@ -358,16 +358,19 @@ if __name__ == "__main__":
     options: Dict[str, Any] = manage_options()
     print("Configuration:\n", json.dumps(vars(options), indent=4, sort_keys=True))
     assert options.model in MODEL_NAMES, "Model %s not supported!" %options.model
-
-    wandb.init(project='FederatedAdaboost', entity='mlgroup', config=options)
-
+    
+    MODEL: str = options.model
     DATASET: str = options.dataset
+    wandb.init(project='FederatedAdaboost',
+               entity='mlgroup',
+               name="%s_%s" %(MODEL, DATASET),
+               config=options)
+    
     TEST_SIZE: float = options.test_size
     NORMALIZE: bool = options.normalize
     N_CLIENTS: int = options.n_clients
     SEED: int = options.seed
     OUTPUT_FILE: bool = options.output_file #unused
-    MODEL: str = options.model
 
     WEAK_LEARNER = DecisionTreeClassifier(random_state=SEED, max_depth=3)
     N_ESTIMATORS: List[int] = [1] + list(range(10, 300, 10))
