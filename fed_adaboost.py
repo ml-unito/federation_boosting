@@ -388,7 +388,7 @@ if __name__ == "__main__":
 
     print("Training...")
     for ne in N_ESTIMATORS:
-        np.random.default_rng(SEED)
+        np.random.seed(SEED)
         print("N_ESTIMATORS:%d" %ne)
 
         if MODEL == "adaboost": 
