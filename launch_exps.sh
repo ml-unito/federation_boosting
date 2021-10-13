@@ -1,5 +1,5 @@
 
-datasets="breast mnistXY sonar ionospehere banknote spambase particle forestcover12"
+datasets="breast sonar ionospehere banknote spambase particle forestcover12"
 
 for dataset in $datasets; do
     echo "Running experiment for $dataset"
