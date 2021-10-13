@@ -364,6 +364,7 @@ if __name__ == "__main__":
     wandb.init(project='FederatedAdaboost',
                entity='mlgroup',
                name="%s_%s" %(MODEL, DATASET),
+               tags=[DATASET],
                config=options)
     
     TEST_SIZE: float = options.test_size
