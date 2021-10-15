@@ -68,7 +68,7 @@ def load_covtype_dataset(seed: int=42) -> Tuple[np.ndarray, np.ndarray, np.ndarr
         dload.save_unzip("https://archive.ics.uci.edu/ml/machine-learning-databases/covtype/covtype.data.gz")
     covtype_df = pd.read_csv("covtype.data", header=None)
     covtype_df = covtype_df[covtype_df[54] < 3]
-    X = covtype_df.loc[:, :54].to_numpy()
+    X = covtype_df.loc[:, :53].to_numpy()
     y = (2*(covtype_df.loc[:, 54] - 1) - 1).to_numpy()
     np.random.seed(seed=seed)
     ids = permutation(X.shape[0])
