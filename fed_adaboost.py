@@ -209,14 +209,36 @@ def split_dataset(X: np.ndarray,
     return X_tr, y_tr
 
 
+def split_data_powerlaw(X: np.ndarray,
+                        y: np.ndarray,
+                        n: int,
+                        mn: int=2,
+                        p: float=4.):
+    assert mn*n <= X.shape[0], "# of instances must be > than mn*n"
+    s = np.array(np.random.power(p, X.shape[0] - mn*n) * n, dtype=int)
+    m = np.array([[i]*mn for i in range(n)]).flatten()
+    assignment = np.concatenate([s, m])
+    np.random.shuffle(assignment)
+    X_tr, y_tr = [], []
+    for i in range(n):
+        idx = np.where(assignment == i)[0]
+        X_tr.append(X[idx])
+        y_tr.append(y[idx])
+    return X_tr, y_tr
+
+#TODO: create base class Boosting
+
 class Adaboost():
     def __init__(self,
                  n_clf: int=5,
                  clf_class: ClassifierMixin=DecisionTreeClassifier()):
         self.n_clf = n_clf
         self.clf_class = clf_class
+        self.clfs = []
+        self.alpha = []
 
-    def fit(self, X: np.ndarray, y: np.ndarray) -> Adaboost:
+    def fit(self, X: np.ndarray, y: np.ndarray, checkpoints: List[int]) -> Adaboost:
+        cks = set(checkpoints)
         n_samples = X.shape[0]
         D = np.full(n_samples, (1 / n_samples))
         self.clfs = []
@@ -235,7 +257,17 @@ class Adaboost():
             D *= np.exp(-self.alpha[t] * y * predictions)
             D /= np.sum(D)
             self.clfs.append(clf)
-        return self
+
+            if (t+1) in cks:
+                #ada = Adaboost(t+1, self.clf_class)
+                #ada.alpha = self.alpha[:]
+                #ada.clfs = self.clfs[:]
+                yield self#ada
+
+        #return self
+    
+    def num_weak_learners(self):
+        return len(self.clfs)
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         y_pred = np.zeros(np.shape(X)[0])
@@ -258,8 +290,11 @@ class Distboost():
                  clf_class: ClassifierMixin=DecisionTreeClassifier()):
         self.n_clf = n_clf
         self.clf_class = clf_class
-    
-    def fit(self, X: np.ndarray, y: np.ndarray) -> Distboost:
+        self.clfs = []
+        self.alpha = []
+
+    def fit(self, X: np.ndarray, y: np.ndarray, checkpoints: List[int]) -> Distboost:
+        cks = set(checkpoints)
         n_samples = sum([x.shape[0] for x in X])
         D = [np.full(x.shape[0], (1 / n_samples)) for x in X]
         self.clfs = []
@@ -291,8 +326,17 @@ class Distboost():
             
             for d in D:
                 d /= Dsum
+
+            if (t+1) in cks:
+                #db = Distboost(t+1, self.clf_class)
+                #db.alpha = self.alpha[:]
+                #db.clfs = self.clfs[:]
+                yield self#db
             
-        return self
+        #return self
+    
+    def num_weak_learners(self):
+        return len(self.clfs)
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         y_pred = np.zeros(np.shape(X)[0])
@@ -307,8 +351,11 @@ class Preweak():
                  clf_class: ClassifierMixin=DecisionTreeClassifier()):
         self.n_clf = n_clf
         self.clf_class = clf_class
+        self.clfs = []
+        self.alpha = []
     
-    def fit(self, X: np.ndarray, y: np.ndarray) -> Preweak:
+    def fit(self, X: np.ndarray, y: np.ndarray, checkpoints: List[int]) -> Preweak:
+        cks = set(checkpoints)
         ht = []
         for j, X_ in enumerate(X):
             clf = Adaboost(self.n_clf, self.clf_class)
@@ -341,15 +388,23 @@ class Preweak():
             D *= np.exp(-self.alpha[t] * y_ * ht_pred[top_model])
             D /= np.sum(D)
             self.clfs.append(top_model)
+
+            if (t+1) in cks:
+                #pw = Preweak(t+1, self.clf_class)
+                #pw.alpha = self.alpha[:]
+                #pw.clfs = self.clfs[:]
+                yield self#pw
         
-        return self
+        #return self
+    
+    def num_weak_learners(self):
+        return len(self.clfs)
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         y_pred = np.zeros(np.shape(X)[0])
         for i, clf in enumerate(self.clfs):
             y_pred += self.alpha[i] * clf.predict(X)
         return 2*(y_pred.flatten() >= 0).astype(int) - 1
-
 
 
 if __name__ == "__main__":
@@ -364,7 +419,7 @@ if __name__ == "__main__":
     wandb.init(project='FederatedAdaboost',
                entity='mlgroup',
                name="%s_%s" %(MODEL, DATASET),
-               tags=[DATASET, MODEL, "WL:DT3"],
+               tags=[DATASET, MODEL, "WL:DT3", "EXP:1_OPT"],
                config=options)
     
     TEST_SIZE: float = options.test_size
@@ -387,29 +442,36 @@ if __name__ == "__main__":
     X_tr, y_tr = split_dataset(X_train, y_train, N_CLIENTS)
 
     print("Training...")
-    for ne in N_ESTIMATORS:
-        np.random.seed(SEED)
-        print("N_ESTIMATORS:%d" %ne)
+    if MODEL == "my_ada": 
+        model = Adaboost(max(N_ESTIMATORS), WEAK_LEARNER)
+        X_, y_ = X_train, y_train
+    elif MODEL == "distboost":
+        model = Distboost(max(N_ESTIMATORS), WEAK_LEARNER)
+        X_, y_ = X_tr, y_tr
+    elif MODEL == "preweak":
+        model = Preweak(max(N_ESTIMATORS), WEAK_LEARNER)
+        X_, y_ = X_tr, y_tr
+    else:
+        raise ValueError("Unknown model %s." %MODEL)
 
-        if MODEL == "adaboost": 
-            model = AdaBoostClassifier(base_estimator=WEAK_LEARNER,
-                                       n_estimators=ne,
-                                       random_state=SEED).fit(X_train, y_train)
-        elif MODEL == "my_ada": 
-            model = Adaboost(ne, WEAK_LEARNER).fit(X_train, y_train)
-        elif MODEL == "distboost":
-            model = Distboost(ne, WEAK_LEARNER).fit(X_tr, y_tr)
-        else: #MODEL == "preweak"
-            model = Preweak(ne, WEAK_LEARNER).fit(X_tr, y_tr)
-
-        y_pred = model.predict(X_test)
+    for strong_learner in model.fit(X_, y_, N_ESTIMATORS):
+        y_pred_tr = strong_learner.predict(X_train)
+        y_pred = strong_learner.predict(X_test)
+        step = strong_learner.num_weak_learners()
 
         wandb.log({
-                "n_estimators" : ne,
+            "train" : {
+                "n_estimators" : step,
+                "accuracy": accuracy_score(y_train, y_pred_tr), 
+                "precision": precision_score(y_train, y_pred_tr),
+                "recall": recall_score(y_train, y_pred_tr),
+                "f1": f1_score(y_train, y_pred_tr)
+            },
+            "test" : {
+                "n_estimators" : step,
                 "accuracy": accuracy_score(y_test, y_pred), 
                 "precision": precision_score(y_test, y_pred),
                 "recall": recall_score(y_test, y_pred),
                 "f1": f1_score(y_test, y_pred)
-            })
-
-
+            }
+        }, step=step)
