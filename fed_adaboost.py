@@ -359,8 +359,8 @@ class Preweak():
         ht = []
         for j, X_ in enumerate(X):
             clf = Adaboost(self.n_clf, self.clf_class)
-            clf.fit(X_, y[j])
-            ht.extend(clf.clfs)
+            for h in clf.fit(X_, y[j], checkpoints):
+                ht.append(h)
 
         # merge the datasets into one (not possible in a real distributed/federated scenario)
         X_ = np.vstack(X) 
