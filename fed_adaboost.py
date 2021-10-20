@@ -22,7 +22,6 @@ import dload
 import urllib.request as ureq
 import json
 import gzip
-
 import wandb
 
 
@@ -52,9 +51,9 @@ def manage_options() -> Dict[str, Any]:
     parser.add_option("-z", "--normalize",
                       dest="normalize", default=False, action="store_true",
                       help="Whether the instances has to be normalized or not - default=False")
-    parser.add_option("-o", "--output",
-                      dest="output_file", default=False, action="store_true",
-                      help="Whether the results has to be saved on a JSON file - default=False")
+    parser.add_option("-l", "--labels",
+                      dest="tags", default="", type="str",
+                      help="list of comma separated tags to be added in the wandb lod - default=''")
     (options, args) = parser.parse_args()
     if len(args) < 1:
         print("Dataset argument missing. Please check the documentation: `python fed_adaboost.py -h`")
@@ -213,7 +212,7 @@ def split_data_powerlaw(X: np.ndarray,
                         y: np.ndarray,
                         n: int,
                         mn: int=2,
-                        p: float=4.):
+                        p: float=4.) -> Tuple[np.ndarray, np.ndarray]:
     assert mn*n <= X.shape[0], "# of instances must be > than mn*n"
     s = np.array(np.random.power(p, X.shape[0] - mn*n) * n, dtype=int)
     m = np.array([[i]*mn for i in range(n)]).flatten()
@@ -226,18 +225,43 @@ def split_data_powerlaw(X: np.ndarray,
         y_tr.append(y[idx])
     return X_tr, y_tr
 
-#TODO: create base class Boosting
 
-class Adaboost():
-    def __init__(self,
-                 n_clf: int=5,
+class Boosting():
+    def __init__(self: Boosting,
+                 n_clf: int=10,
                  clf_class: ClassifierMixin=DecisionTreeClassifier()):
         self.n_clf = n_clf
         self.clf_class = clf_class
         self.clfs = []
         self.alpha = []
+    
+    def fit(self: Boosting,
+            X: np.ndarray,
+            y: np.ndarray,
+            checkpoints: List[int],
+            seed: int=42) -> Generator[Boosting]:
+        raise NotImplementedError()
+    
+    def num_weak_learners(self: Boosting):
+        return len(self.clfs)
+    
+    def predict(self: Boosting,
+                X: np.ndarray) -> np.ndarray:
+        y_pred = np.zeros(np.shape(X)[0])
+        for i, clf in enumerate(self.clfs):
+            y_pred += self.alpha[i] * clf.predict(X)
+        return 2*(y_pred.flatten() >= 0).astype(int) - 1 
 
-    def fit(self, X: np.ndarray, y: np.ndarray, checkpoints: List[int]) -> Adaboost:
+
+class Adaboost(Boosting):
+
+    def fit(self: Adaboost,
+            X: np.ndarray,
+            y: np.ndarray,
+            checkpoints: List[int],
+            seed: int=42) -> Generator[Adaboost]:
+
+        np.random.seed(seed)
         cks = set(checkpoints)
         n_samples = X.shape[0]
         D = np.full(n_samples, (1 / n_samples))
@@ -245,10 +269,8 @@ class Adaboost():
         self.alpha = []
         for t in range(self.n_clf):
             clf = deepcopy(self.clf_class)
-            # Sample new dataset according to D
             ids = choice(n_samples, size=n_samples, replace=True, p=D)
             X_, y_ = X[ids], y[ids]
-            #
             clf.fit(X_, y_)
 
             predictions = clf.predict(X)
@@ -259,41 +281,29 @@ class Adaboost():
             self.clfs.append(clf)
 
             if (t+1) in cks:
-                #ada = Adaboost(t+1, self.clf_class)
-                #ada.alpha = self.alpha[:]
-                #ada.clfs = self.clfs[:]
-                yield self#ada
-
-        #return self
-    
-    def num_weak_learners(self):
-        return len(self.clfs)
-
-    def predict(self, X: np.ndarray) -> np.ndarray:
-        y_pred = np.zeros(np.shape(X)[0])
-        for i, clf in enumerate(self.clfs):
-            y_pred += self.alpha[i] * clf.predict(X)
-        return 2*(y_pred.flatten() >= 0).astype(int) - 1 #np.sign treats zero as 0 (neither negative nor positive)
+                yield self
 
 
+# Support class for Distboost
 class Hyp():
-    def __init__(self, ht: List[ClassifierMixin]):
+    def __init__(self: Hyp,
+                 ht: List[ClassifierMixin]):
         self.ht = ht
     
-    def __call__(self, X: np.ndarray) -> np.ndarray:
+    def predict(self: Hyp,
+                X: np.ndarray) -> np.ndarray:
         return np.sign(np.sum([h.predict(X) for h in self.ht], axis=0))
 
 
-class Distboost():
-    def __init__(self,
-                 n_clf: int=5,
-                 clf_class: ClassifierMixin=DecisionTreeClassifier()):
-        self.n_clf = n_clf
-        self.clf_class = clf_class
-        self.clfs = []
-        self.alpha = []
+class Distboost(Boosting):
 
-    def fit(self, X: np.ndarray, y: np.ndarray, checkpoints: List[int]) -> Distboost:
+    def fit(self: Distboost,
+            X: np.ndarray,
+            y: np.ndarray,
+            checkpoints: List[int],
+            seed: int=42) -> Generator[Distboost]:
+
+        np.random.seed(seed)
         cks = set(checkpoints)
         n_samples = sum([x.shape[0] for x in X])
         D = [np.full(x.shape[0], (1 / n_samples)) for x in X]
@@ -303,10 +313,8 @@ class Distboost():
             ht = []
             for j, X_ in enumerate(X):
                 clf = deepcopy(self.clf_class)
-                # Sample new dataset according to D[j] (must be normalized)
                 ids = choice(X_.shape[0], size=X_.shape[0], replace=True, p=D[j]/np.sum(D[j]))
                 X__, y__ = X_[ids], y[j][ids]
-                #
                 clf.fit(X__, y__)
                 ht.append(clf)
 
@@ -316,7 +324,7 @@ class Distboost():
             min_error = 0
             predictions = []
             for j, X_ in enumerate(X):
-                predictions.append(H(X_))
+                predictions.append(H.predict(X_))
                 min_error += sum(D[j][y[j] != predictions[j]])
             self.alpha.append(0.5 * log((1.0 - min_error) / (min_error + 1e-10)))
             
@@ -328,33 +336,18 @@ class Distboost():
                 d /= Dsum
 
             if (t+1) in cks:
-                #db = Distboost(t+1, self.clf_class)
-                #db.alpha = self.alpha[:]
-                #db.clfs = self.clfs[:]
-                yield self#db
-            
-        #return self
+                yield self
+
+
+class Preweak(Boosting):
     
-    def num_weak_learners(self):
-        return len(self.clfs)
-
-    def predict(self, X: np.ndarray) -> np.ndarray:
-        y_pred = np.zeros(np.shape(X)[0])
-        for i, clf in enumerate(self.clfs):
-            y_pred += self.alpha[i] * clf(X)
-        return 2*(y_pred.flatten() >= 0).astype(int) - 1
-
-
-class Preweak():
-    def __init__(self,
-                 n_clf: int=5,
-                 clf_class: ClassifierMixin=DecisionTreeClassifier()):
-        self.n_clf = n_clf
-        self.clf_class = clf_class
-        self.clfs = []
-        self.alpha = []
-    
-    def fit(self, X: np.ndarray, y: np.ndarray, checkpoints: List[int]) -> Preweak:
+    def fit(self: Preweak,
+            X: np.ndarray,
+            y: np.ndarray,
+            checkpoints: List[int],
+            seed: int=42) -> Generator[Preweak]:
+        
+        np.random.seed(seed)
         cks = set(checkpoints)
         ht = []
         for j, X_ in enumerate(X):
@@ -390,47 +383,35 @@ class Preweak():
             self.clfs.append(top_model)
 
             if (t+1) in cks:
-                #pw = Preweak(t+1, self.clf_class)
-                #pw.alpha = self.alpha[:]
-                #pw.clfs = self.clfs[:]
-                yield self#pw
-        
-        #return self
-    
-    def num_weak_learners(self):
-        return len(self.clfs)
+                yield self
 
-    def predict(self, X: np.ndarray) -> np.ndarray:
-        y_pred = np.zeros(np.shape(X)[0])
-        for i, clf in enumerate(self.clfs):
-            y_pred += self.alpha[i] * clf.predict(X)
-        return 2*(y_pred.flatten() >= 0).astype(int) - 1
 
 
 if __name__ == "__main__":
     
-    MODEL_NAMES: List[str] = ["adaboost", "my_ada", "distboost", "preweak"]
+    MODEL_NAMES: List[str] = ["my_ada", "distboost", "preweak"]
     options: Dict[str, Any] = manage_options()
     print("Configuration:\n", json.dumps(vars(options), indent=4, sort_keys=True))
     assert options.model in MODEL_NAMES, "Model %s not supported!" %options.model
     
     MODEL: str = options.model
     DATASET: str = options.dataset
+    TAGS: List[str] = options.tags.split(",")
     wandb.init(project='FederatedAdaboost',
                entity='mlgroup',
                name="%s_%s" %(MODEL, DATASET),
-               tags=[DATASET, MODEL, "WL:DT3", "EXP:1_OPT"],
+               #tags=[DATASET, MODEL, "WL:DT3", "EXP:1_OPT"],
+               tags=[DATASET, MODEL] + TAGS,
                config=options)
     
     TEST_SIZE: float = options.test_size
     NORMALIZE: bool = options.normalize
     N_CLIENTS: int = options.n_clients
     SEED: int = options.seed
-    OUTPUT_FILE: bool = options.output_file #unused
 
     WEAK_LEARNER = DecisionTreeClassifier(random_state=SEED, max_depth=3)
     N_ESTIMATORS: List[int] = [1] + list(range(10, 300, 10))
-    METRICS = ["accuracy", "precision", "recall", "f1"]
+    METRICS: List[str] = ["accuracy", "precision", "recall", "f1"]
 
     X_train, X_test, y_train, y_test = load_binary_classification_dataset(name_or_path=DATASET,
                                                                           test_size=TEST_SIZE,
@@ -441,7 +422,6 @@ if __name__ == "__main__":
     print("Test set size: %d" %X_test.shape[0])
     X_tr, y_tr = split_dataset(X_train, y_train, N_CLIENTS)
 
-    print("Training...")
     if MODEL == "my_ada": 
         model = Adaboost(max(N_ESTIMATORS), WEAK_LEARNER)
         X_, y_ = X_train, y_train
@@ -454,24 +434,26 @@ if __name__ == "__main__":
     else:
         raise ValueError("Unknown model %s." %MODEL)
 
+    print("Training...")
     for strong_learner in model.fit(X_, y_, N_ESTIMATORS):
         y_pred_tr = strong_learner.predict(X_train)
-        y_pred = strong_learner.predict(X_test)
-        step = strong_learner.num_weak_learners()
+        y_pred_te = strong_learner.predict(X_test)
 
         wandb.log({
             "train" : {
-                "n_estimators" : step,
+                "n_estimators" : strong_learner.num_weak_learners(),
                 "accuracy": accuracy_score(y_train, y_pred_tr), 
                 "precision": precision_score(y_train, y_pred_tr),
                 "recall": recall_score(y_train, y_pred_tr),
                 "f1": f1_score(y_train, y_pred_tr)
             },
             "test" : {
-                "n_estimators" : step,
-                "accuracy": accuracy_score(y_test, y_pred), 
-                "precision": precision_score(y_test, y_pred),
-                "recall": recall_score(y_test, y_pred),
-                "f1": f1_score(y_test, y_pred)
+                "n_estimators" : strong_learner.num_weak_learners(),
+                "accuracy": accuracy_score(y_test, y_pred_te), 
+                "precision": precision_score(y_test, y_pred_te),
+                "recall": recall_score(y_test, y_pred_te),
+                "f1": f1_score(y_test, y_pred_te)
             }
         }, step=step)
+        
+    print("Training complete!")
