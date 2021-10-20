@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import division, print_function, annotations
 import os
-from typing import Any, Tuple, Dict, List
+from typing import Any, Tuple, Dict, List, Generator
 from copy import deepcopy
 from math import log
 import tqdm
@@ -400,7 +400,6 @@ if __name__ == "__main__":
     wandb.init(project='FederatedAdaboost',
                entity='mlgroup',
                name="%s_%s" %(MODEL, DATASET),
-               #tags=[DATASET, MODEL, "WL:DT3", "EXP:1_OPT"],
                tags=[DATASET, MODEL] + TAGS,
                config=options)
     
@@ -438,22 +437,22 @@ if __name__ == "__main__":
     for strong_learner in model.fit(X_, y_, N_ESTIMATORS):
         y_pred_tr = strong_learner.predict(X_train)
         y_pred_te = strong_learner.predict(X_test)
+        step = strong_learner.num_weak_learners()
 
         wandb.log({
             "train" : {
-                "n_estimators" : strong_learner.num_weak_learners(),
+                "n_estimators" : step,
                 "accuracy": accuracy_score(y_train, y_pred_tr), 
                 "precision": precision_score(y_train, y_pred_tr),
                 "recall": recall_score(y_train, y_pred_tr),
                 "f1": f1_score(y_train, y_pred_tr)
             },
             "test" : {
-                "n_estimators" : strong_learner.num_weak_learners(),
+                "n_estimators" : step,
                 "accuracy": accuracy_score(y_test, y_pred_te), 
                 "precision": precision_score(y_test, y_pred_te),
                 "recall": recall_score(y_test, y_pred_te),
                 "f1": f1_score(y_test, y_pred_te)
             }
         }, step=step)
-        
     print("Training complete!")
