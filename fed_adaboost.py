@@ -353,7 +353,8 @@ class Preweak(Boosting):
         for j, X_ in enumerate(X):
             clf = Adaboost(self.n_clf, self.clf_class)
             for h in clf.fit(X_, y[j], checkpoints):
-                ht.append(h)
+                pass
+            ht.extend(clf.clfs)
 
         # merge the datasets into one (not possible in a real distributed/federated scenario)
         X_ = np.vstack(X) 
@@ -439,6 +440,7 @@ if __name__ == "__main__":
         y_pred_te = strong_learner.predict(X_test)
         step = strong_learner.num_weak_learners()
 
+        #print({
         wandb.log({
             "train" : {
                 "n_estimators" : step,
@@ -455,4 +457,5 @@ if __name__ == "__main__":
                 "f1": f1_score(y_test, y_pred_te)
             }
         }, step=step)
+        #})
     print("Training complete!")
