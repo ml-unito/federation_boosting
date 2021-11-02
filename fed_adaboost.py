@@ -148,6 +148,9 @@ def load_binary_classification_dataset(name_or_path: str,
     X,Y in {0, 1, ..., 9}. The `test_size` argument is ignored for the mnist, particle and
     the forestcover12 datasets.
     """
+    if name_or_path == "ijcnn1":
+        name_or_path = "data/ijcnn1.svmlight"
+
     if name_or_path == "breast":
         dataset = datasets.load_breast_cancer()
         X, y = dataset.data, dataset.target
@@ -180,6 +183,15 @@ def load_binary_classification_dataset(name_or_path: str,
     elif name_or_path == "forestcover12":
         # test_size is ignored for this dataset
         return load_covtype_dataset(seed)
+    elif name_or_path == "a9a" or name_or_path == "cod-rna":
+        X_train, y_train = load_svmlight_file("data/%s.tr.svmlight" %name_or_path)
+        X_test, y_test = load_svmlight_file("data/%s.te.svmlight" %name_or_path)
+
+        if name_or_path == "a9a":
+            X_train = X_train[:, :-1]
+        X_train = X_train.toarray()
+        X_test = X_test.toarray()
+        return X_train, X_test, y_train, y_test
     else:
         X, y = load_svmlight_file(name_or_path)
         y = LabelEncoder().fit_transform(y)
@@ -188,6 +200,7 @@ def load_binary_classification_dataset(name_or_path: str,
     y = 2*y - 1 # 0/1 labels to -1/1
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=seed)
 
+    #CHECK: normalization is applied only on some cases. This needs to be available for all datasets
     if normalize:
         scaler = StandardScaler().fit(X_train)   
         X_train = scaler.transform(X_train)
