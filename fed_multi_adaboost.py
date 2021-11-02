@@ -20,11 +20,11 @@ import wandb
 
 from fed_adaboost import Boosting, load_mnist_dataset, split_dataset, split_data_powerlaw
 
-####################### ATTENTION ########################
-# Set WANDB to True if you want to user Weights & biases #
-##########################################################
-WANDB = False                                           
-##########################################################
+####################### ATTENTION #######################
+# Set WANDB to True if you want to use Weights & biases #
+#########################################################
+WANDB = True                                           
+#########################################################
 
 
 def manage_options() -> Dict[str, Any]:
