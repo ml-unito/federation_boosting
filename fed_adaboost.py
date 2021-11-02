@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import division, print_function, annotations
 import os
-from typing import Any, Tuple, Dict, List, Generator
+from typing import Any, Tuple, Dict, List, Generator, Optional
 from copy import deepcopy
 from math import log
 import tqdm
@@ -51,6 +51,9 @@ def manage_options() -> Dict[str, Any]:
     parser.add_option("-z", "--normalize",
                       dest="normalize", default=False, action="store_true",
                       help="Whether the instances has to be normalized or not - default=False")
+    parser.add_option("-d", "--distribution",
+                      dest="distribution", default="uniform", type="str",
+                      help="How instances are distributed on the clients - default=uniform")
     parser.add_option("-l", "--labels",
                       dest="tags", default="", type="str",
                       help="list of comma separated tags to be added in the wandb lod - default=''")
@@ -152,7 +155,6 @@ def load_binary_classification_dataset(name_or_path: str,
     elif name_or_path.startswith("mnist"):
         digits = name_or_path.replace("mnist", "")
         d1, d2 = int(digits[0]), int(digits[1])
-        dataset = datasets.load_digits()
         X_train, X_test, y_train, y_test = load_mnist_dataset()
         ids_tr = np.concatenate([np.where(y_train == d1)[0].flatten(),
                                  np.where(y_train == d2)[0].flatten()])
@@ -238,7 +240,7 @@ class Boosting():
     def fit(self: Boosting,
             X: np.ndarray,
             y: np.ndarray,
-            checkpoints: List[int],
+            checkpoints: Optional[List[int]]=None,
             seed: int=42) -> Generator[Boosting]:
         raise NotImplementedError()
     
@@ -258,11 +260,11 @@ class Adaboost(Boosting):
     def fit(self: Adaboost,
             X: np.ndarray,
             y: np.ndarray,
-            checkpoints: List[int],
+            checkpoints: Optional[List[int]]=None,
             seed: int=42) -> Generator[Adaboost]:
 
         np.random.seed(seed)
-        cks = set(checkpoints)
+        cks = set(checkpoints) if checkpoints is not None else [self.n_clf]
         n_samples = X.shape[0]
         D = np.full(n_samples, (1 / n_samples))
         self.clfs = []
@@ -292,7 +294,7 @@ class Hyp():
     
     def predict(self: Hyp,
                 X: np.ndarray) -> np.ndarray:
-        return np.sign(np.sum([h.predict(X) for h in self.ht], axis=0))
+        return 2*(np.sum([h.predict(X) for h in self.ht], axis=0) >= 0).astype(int) - 1 
 
 
 class Distboost(Boosting):
@@ -300,11 +302,11 @@ class Distboost(Boosting):
     def fit(self: Distboost,
             X: np.ndarray,
             y: np.ndarray,
-            checkpoints: List[int],
+            checkpoints: Optional[List[int]]=None,
             seed: int=42) -> Generator[Distboost]:
 
         np.random.seed(seed)
-        cks = set(checkpoints)
+        cks = set(checkpoints) if checkpoints is not None else [self.n_clf]
         n_samples = sum([x.shape[0] for x in X])
         D = [np.full(x.shape[0], (1 / n_samples)) for x in X]
         self.clfs = []
@@ -344,11 +346,11 @@ class Preweak(Boosting):
     def fit(self: Preweak,
             X: np.ndarray,
             y: np.ndarray,
-            checkpoints: List[int],
+            checkpoints: Optional[List[int]]=None,
             seed: int=42) -> Generator[Preweak]:
         
         np.random.seed(seed)
-        cks = set(checkpoints)
+        cks = set(checkpoints) if checkpoints is not None else [self.n_clf]
         ht = []
         for j, X_ in enumerate(X):
             clf = Adaboost(self.n_clf, self.clf_class)
@@ -407,6 +409,7 @@ if __name__ == "__main__":
     TEST_SIZE: float = options.test_size
     NORMALIZE: bool = options.normalize
     N_CLIENTS: int = options.n_clients
+    DISTRIBUTION: str = options.distribution
     SEED: int = options.seed
 
     WEAK_LEARNER = DecisionTreeClassifier(random_state=SEED, max_depth=3)
@@ -420,7 +423,12 @@ if __name__ == "__main__":
     print("# weak learners: %s" %N_ESTIMATORS)
     print("Training set size: %d" %X_train.shape[0])
     print("Test set size: %d" %X_test.shape[0])
-    X_tr, y_tr = split_dataset(X_train, y_train, N_CLIENTS)
+    if DISTRIBUTION == "uniform":
+        X_tr, y_tr = split_dataset(X_train, y_train, N_CLIENTS)
+    elif DISTRIBUTION == "powerlaw":
+        X_tr, y_tr = split_data_powerlaw(X_train, y_train, N_CLIENTS)
+    else:
+        raise ValueError("Unknown distribution %s." %DISTRIBUTION)
 
     if MODEL == "my_ada": 
         model = Adaboost(max(N_ESTIMATORS), WEAK_LEARNER)
