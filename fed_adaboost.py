@@ -28,7 +28,7 @@ import wandb
 # Set WANDB to True if you want to user Weights & biases #
 ##########################################################
 WANDB = True                                           
-#########################################################
+##########################################################
 
 def manage_options() -> Dict[str, Any]:
     parser = OptionParser(usage="usage: %prog [options] dataset",
