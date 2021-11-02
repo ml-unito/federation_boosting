@@ -12,7 +12,7 @@ from sklearn import datasets
 from sklearn.base import ClassifierMixin
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.ensemble import AdaBoostClassifier
+#from sklearn.ensemble import AdaBoostClassifier
 from sklearn.datasets import load_svmlight_file
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
@@ -24,6 +24,11 @@ import json
 import gzip
 import wandb
 
+####################### ATTENTION ########################
+# Set WANDB to True if you want to user Weights & biases #
+##########################################################
+WANDB = True                                           
+#########################################################
 
 def manage_options() -> Dict[str, Any]:
     parser = OptionParser(usage="usage: %prog [options] dataset",
@@ -137,7 +142,6 @@ UCI_URL_AND_CLASS : Dict[str, Tuple[str, int]] = {
 }
 
 def load_binary_classification_dataset(name_or_path: str,
-                                       normalize: bool=True,
                                        test_size: float=0.1, #real range (0,1)
                                        seed: int=42) -> Tuple[np.ndarray, np.ndarray]:
     """
@@ -199,12 +203,6 @@ def load_binary_classification_dataset(name_or_path: str,
 
     y = 2*y - 1 # 0/1 labels to -1/1
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=seed)
-
-    #CHECK: normalization is applied only on some cases. This needs to be available for all datasets
-    if normalize:
-        scaler = StandardScaler().fit(X_train)   
-        X_train = scaler.transform(X_train)
-        X_test = scaler.transform(X_test)
     
     return X_train, X_test, y_train, y_test
 
@@ -413,11 +411,12 @@ if __name__ == "__main__":
     MODEL: str = options.model
     DATASET: str = options.dataset
     TAGS: List[str] = options.tags.split(",")
-    wandb.init(project='FederatedAdaboost',
-               entity='mlgroup',
-               name="%s_%s" %(MODEL, DATASET),
-               tags=[DATASET, MODEL] + TAGS,
-               config=options)
+    if WANDB:
+        wandb.init(project='FederatedAdaboost',
+                   entity='mlgroup',
+                   name="%s_%s" %(MODEL, DATASET),
+                   tags=[DATASET, MODEL] + TAGS,
+                   config=options)
     
     TEST_SIZE: float = options.test_size
     NORMALIZE: bool = options.normalize
@@ -431,8 +430,12 @@ if __name__ == "__main__":
 
     X_train, X_test, y_train, y_test = load_binary_classification_dataset(name_or_path=DATASET,
                                                                           test_size=TEST_SIZE,
-                                                                          normalize=NORMALIZE,
                                                                           seed=SEED)
+    if NORMALIZE:
+        scaler = StandardScaler().fit(X_train)   
+        X_train = scaler.transform(X_train)
+        X_test = scaler.transform(X_test)
+    
     print("# weak learners: %s" %N_ESTIMATORS)
     print("Training set size: %d" %X_train.shape[0])
     print("Test set size: %d" %X_test.shape[0])
@@ -461,8 +464,7 @@ if __name__ == "__main__":
         y_pred_te = strong_learner.predict(X_test)
         step = strong_learner.num_weak_learners()
 
-        #print({
-        wandb.log({
+        log_dict = {
             "train" : {
                 "n_estimators" : step,
                 "accuracy": accuracy_score(y_train, y_pred_tr), 
@@ -477,6 +479,9 @@ if __name__ == "__main__":
                 "recall": recall_score(y_test, y_pred_te),
                 "f1": f1_score(y_test, y_pred_te)
             }
-        }, step=step)
-        #})
+        }
+
+        if WANDB: wandb.log(log_dict, step=step)
+        else: print(log_dict)
+
     print("Training complete!")
