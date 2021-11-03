@@ -3,11 +3,11 @@ from __future__ import division, print_function, annotations
 from typing import Any, Tuple, Dict, List, Generator, Optional
 from copy import deepcopy
 from math import log
-import tqdm
 import pandas as pd
 import numpy as np
 from numpy.random import choice
 from sklearn.base import ClassifierMixin
+from sklearn.datasets import load_iris
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import AdaBoostClassifier
@@ -32,7 +32,7 @@ def manage_options() -> Dict[str, Any]:
                           version="%prog 0.1",
                           description="Testing Distboost and Preweak from Cooper et al. 2017 "\
                           "for multi-class classification. "\
-                          "Supported dataset: mnist, pandigits, letter and sat. The dataset "\
+                          "Supported dataset: iris, mnist, pandigits, letter and sat. The dataset "\
                           "can be also a path to a svmlight file.")
     parser.add_option("-s", "--seed",
                       dest="seed", default=42, type="int", 
@@ -73,6 +73,9 @@ def load_classification_dataset(name_or_path: str,
         y = LabelEncoder().fit_transform(df["label"].to_numpy())
     elif name_or_path == "mnist":
         return load_mnist_dataset()
+    elif name_or_path == "iris":
+        iris = load_iris()
+        X, y = iris.data, iris.target
     elif name_or_path == "pendigits":
         df_tr = pd.read_csv("data/pendigits.tr.csv", header=None)
         df_te = pd.read_csv("data/pendigits.te.csv", header=None)
@@ -101,8 +104,24 @@ def load_classification_dataset(name_or_path: str,
     
     return X_train, X_test, y_train, y_test
 
+class MulticlassBoosting(Boosting):
+    def __init__(self: MulticlassBoosting,
+                 n_clf: int=10,
+                 clf_class: ClassifierMixin=DecisionTreeClassifier()):
+        super(MulticlassBoosting, self).__init__(n_clf, clf_class)
+        self.K = None #to be defined in the fit method
 
-class Samme(Boosting):
+    def predict(self: Boosting,
+                X: np.ndarray) -> np.ndarray:
+        y_pred = np.zeros((np.shape(X)[0], self.K))
+        for i, clf in enumerate(self.clfs):
+            pred = clf.predict(X)
+            for j, c in enumerate(pred):
+                y_pred[j, c] += self.alpha[i]
+        return np.argmax(y_pred, axis=1)
+
+
+class Samme(MulticlassBoosting):
     def fit(self: Samme,
             X: np.ndarray,
             y: np.ndarray,
@@ -123,7 +142,7 @@ class Samme(Boosting):
             clf.fit(X_, y_)
 
             predictions = clf.predict(X)
-            min_error = sum(D[y != predictions]) / sum(D)
+            min_error = np.sum(D[y != predictions]) / np.sum(D)
             self.alpha.append(log((1.0 - min_error) / (min_error + 1e-10)) + log(self.K-1)) # kind of additive smoothing
             D *= np.exp(self.alpha[t] * (y != predictions))
             D /= np.sum(D)
@@ -131,15 +150,6 @@ class Samme(Boosting):
 
             if (t+1) in cks:
                 yield self
-        
-    def predict(self: Boosting,
-                X: np.ndarray) -> np.ndarray:
-        y_pred = np.zeros((np.shape(X)[0], self.K))
-        for i, clf in enumerate(self.clfs):
-            pred = clf.predict(X)
-            for j, c in enumerate(pred):
-                y_pred[j, c] += self.alpha[i]
-        return np.argmax(y_pred, axis=1) #CHECK: is it the correct axis?
 
 
 # Support class for Distboost
@@ -154,12 +164,13 @@ class Hyp():
                 X: np.ndarray) -> np.ndarray:
         y_pred = np.zeros((X.shape[0], self.K))
         for h in self.ht:
-            for j, c in enumerate(h.predict(X)):
+            pred = h.predict(X)
+            for j, c in enumerate(pred):
                 y_pred[j, c] += 1
-        return np.argmax(y_pred, axis=1) 
+        return np.argmax(y_pred, axis=1)
 
 
-class DistSamme(Boosting):
+class DistSamme(MulticlassBoosting):
     def fit(self: DistSamme,
             X: np.ndarray,
             y: np.ndarray,
@@ -189,7 +200,7 @@ class DistSamme(Boosting):
             predictions = []
             for j, X_ in enumerate(X):
                 predictions.append(H.predict(X_))
-                min_error += sum(D[j][y[j] != predictions[j]])
+                min_error += np.sum(D[j][y[j] != predictions[j]]) #/ np.sum(D[j])
             self.alpha.append(log((1.0 - min_error) / (min_error + 1e-10)) + log(self.K-1)) # kind of additive smoothing
 
             for j, X_ in enumerate(X):
@@ -203,7 +214,7 @@ class DistSamme(Boosting):
                 yield self
 
 
-class PreweakSamme(Boosting):
+class PreweakSamme(MulticlassBoosting):
     def fit(self: PreweakSamme,
             X: np.ndarray,
             y: np.ndarray,
@@ -237,7 +248,7 @@ class PreweakSamme(Boosting):
             min_error = 1000
             top_model = None
             for h, hpred in ht_pred.items():
-                err = sum(D[y__ != hpred[ids]]) / sum(D)
+                err = np.sum(D[y__ != hpred[ids]]) #/ np.sum(D)
                 if err < min_error:
                     top_model = h
                     min_error = err
