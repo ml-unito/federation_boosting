@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import division, print_function, annotations
+from os import name
 from typing import Any, Tuple, Dict, List, Generator, Optional
 from copy import deepcopy
 from math import log
@@ -76,6 +77,14 @@ def load_classification_dataset(name_or_path: str,
     elif name_or_path == "iris":
         iris = load_iris()
         X, y = iris.data, iris.target
+    elif name_or_path == "nursery":
+        df = pd.read_csv("data/nursery.csv", header=None)
+        columns = ["parents", "has_nurs", "form", "children", "housing", "finance", "social", "health", "label"]
+        df.columns = columns
+        y = LabelEncoder().fit_transform(df["label"].to_numpy())
+        df = pd.concat([pd.get_dummies(df[c], prefix="oh_%s" %c) for c in columns[:-1]], axis=1)
+        X = df.to_numpy(dtype=np.dtype(float))
+        print(y)
     elif name_or_path == "pendigits":
         df_tr = pd.read_csv("data/pendigits.tr.csv", header=None)
         df_te = pd.read_csv("data/pendigits.te.csv", header=None)
@@ -103,6 +112,7 @@ def load_classification_dataset(name_or_path: str,
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=seed)
     
     return X_train, X_test, y_train, y_test
+
 
 class MulticlassBoosting(Boosting):
     def __init__(self: MulticlassBoosting,
