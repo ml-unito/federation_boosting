@@ -295,7 +295,7 @@ if __name__ == "__main__":
     N_CLIENTS: int = options.n_clients
     SEED: int = options.seed
 
-    WEAK_LEARNER = DecisionTreeClassifier(random_state=SEED, max_depth=3)
+    WEAK_LEARNER = DecisionTreeClassifier(random_state=SEED)
     N_ESTIMATORS: List[int] = [1] + list(range(10, 300, 10))
     METRICS: List[str] = ["accuracy", "precision", "recall", "f1"]
 
