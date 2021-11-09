@@ -114,17 +114,20 @@ URL_MNIST: Dict[str, Tuple[str, str]] = {
 def load_mnist_dataset():
     print("Downloading MNIST")
     for k, v in tqdm.tqdm(URL_MNIST.items()):
-        ureq.urlretrieve(v[0] + v[1], v[1])
+        ureq.urlretrieve(v[0] + v[1], "./data/" + v[1])
     
     mnist = {}
     for k in ["training_images", "test_images"]:
-        name = URL_MNIST[k][1]
+        name = "./data/" + URL_MNIST[k][1]
         with gzip.open(name, 'rb') as f:
             mnist[k] = np.frombuffer(f.read(), np.uint8, offset=16).reshape(-1,28*28)
     for k in ["training_labels", "test_labels"]:
-        name = URL_MNIST[k][1]
+        name = "./data/" + URL_MNIST[k][1]
         with gzip.open(name, 'rb') as f:
             mnist[k] = np.frombuffer(f.read(), np.uint8, offset=8)
+
+    for _, v in tqdm.tqdm(URL_MNIST.items()):
+        os.remove("./data/" + v[1])
 
     return mnist["training_images"], \
            mnist["test_images"], \
