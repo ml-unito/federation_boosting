@@ -27,7 +27,7 @@ Options:
     Number of clients (>= 1) - default=10
 * `-z`, `--normalize`\
     Whether the instances has to be normalized (standard scaling) or not - default=False
-* `-o`, --output\
+* `-o`, `--output`\
     Whether the results has to be saved on a JSON file - default=False
 
 
