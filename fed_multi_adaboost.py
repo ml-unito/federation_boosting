@@ -159,6 +159,7 @@ class Samme(MulticlassBoosting):
             self.clfs.append(clf)
 
             if (t+1) in cks:
+                self.current_weak_error = min_error
                 yield self
 
 
@@ -220,7 +221,9 @@ class DistSamme(MulticlassBoosting):
             for d in D:
                 d /= Dsum
 
+
             if (t+1) in cks:
+                self.current_weak_error = min_error
                 yield self
 
 
@@ -268,7 +271,9 @@ class PreweakSamme(MulticlassBoosting):
             D /= np.sum(D)
             self.clfs.append(top_model)
 
+
             if (t+1) in cks:
+                self.current_weak_error = min_error
                 yield self
 
 
@@ -314,20 +319,19 @@ class AdaboostF1(MulticlassBoosting):
 
             errors = np.array([sum(D[y_ != clf.predict(X_)]) for clf in fed_clfs])
             best_clf = fed_clfs[np.argmin(errors)]
-            best_error = errors[np.argmin(errors)]
+            min_error = errors[np.argmin(errors)]
 
             predictions = best_clf.predict(X_)
 
-            self.alpha.append(log((1.0 - best_error) / (best_error + 1e-10)) + log(self.K-1)) # kind of additive smoothing
+            self.alpha.append(log((1.0 - min_error) / (min_error + 1e-10)) + log(self.K-1)) # kind of additive smoothing
             D *= np.exp(self.alpha[t] * (y_ != predictions))
-
-            # self.alpha.append(0.5 * log(1.0 - best_error) / (best_error + 1e-10)) # kind of additive smoothing 
-            # D *= np.exp(-self.alpha[t] * y_ * predictions)
 
             D /= np.sum(D)
             self.clfs.append(best_clf)
 
+
             if (t+1) in cks:
+                self.current_weak_error = min_error
                 yield self
 
 
@@ -397,7 +401,8 @@ if __name__ == "__main__":
                 "accuracy": accuracy_score(y_train, y_pred_tr), 
                 "precision": precision_score(y_train, y_pred_tr, average="micro"),
                 "recall": recall_score(y_train, y_pred_tr, average="micro"),
-                "f1": f1_score(y_train, y_pred_tr, average="micro")
+                "f1": f1_score(y_train, y_pred_tr, average="micro"),
+                "weak_error": strong_learner.current_weak_error
             },
             "test" : {
                 "n_estimators" : step,
