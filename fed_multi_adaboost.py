@@ -24,7 +24,7 @@ from fed_adaboost import Boosting, load_mnist_dataset, split_dataset, split_data
 ####################### ATTENTION #######################
 # Set WANDB to True if you want to use Weights & biases #
 #########################################################
-WANDB = False                                           
+WANDB = True                                           
 #########################################################
 
 
