@@ -17,7 +17,7 @@ from sklearn.datasets import load_svmlight_file
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 import matplotlib.pyplot as plt
-from optparse import OptionParser
+from optparse import OptionParser, Values
 import dload
 import urllib.request as ureq
 import json
@@ -30,7 +30,7 @@ import wandb
 WANDB = True                                           
 ##########################################################
 
-def manage_options() -> Dict[str, Any]:
+def manage_options() -> Values:
     parser = OptionParser(usage="usage: %prog [options] dataset",
                           version="%prog 0.1",
                           description="Testing Distboost and Preweak from Cooper et al. 2017. "\
@@ -91,7 +91,7 @@ def load_particle_dataset() -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
 
     with open("MiniBooNE_PID.txt") as f:
         cnt_pos, cnt_neg = map(int, f.readline().strip().split(" "))
-        X = []
+        X:np.ndarray = []
         for _ in range(cnt_pos + cnt_neg):
             line = f.readline().strip().replace(" -", "  -").split("  ")
             X.append(list(map(float, line)))
@@ -146,7 +146,7 @@ UCI_URL_AND_CLASS : Dict[str, Tuple[str, int]] = {
 
 def load_binary_classification_dataset(name_or_path: str,
                                        test_size: float=0.1, #real range (0,1)
-                                       seed: int=42) -> Tuple[np.ndarray, np.ndarray]:
+                                       seed: int=42) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Load a UCI binary classification dataset. `name_or_path` must be a valid dataset name
     (string) or a path to a svmlight file. The supported dataset names are: breast, mnistXY, sonar,
@@ -248,14 +248,14 @@ class Boosting():
                  clf_class: ClassifierMixin=DecisionTreeClassifier()):
         self.n_clf = n_clf
         self.clf_class = clf_class
-        self.clfs = []
-        self.alpha = []
+        self.clfs: List[ClassifierMixin] = []
+        self.alpha: List[ClassifierMixin] = []
     
     def fit(self: Boosting,
             X: np.ndarray,
             y: np.ndarray,
             checkpoints: Optional[List[int]]=None,
-            seed: int=42) -> Generator[Boosting]:
+            seed: int=42) -> Generator[Boosting, None, None]:
         raise NotImplementedError()
     
     def num_weak_learners(self: Boosting):
@@ -275,7 +275,7 @@ class Adaboost(Boosting):
             X: np.ndarray,
             y: np.ndarray,
             checkpoints: Optional[List[int]]=None,
-            seed: int=42) -> Generator[Adaboost]:
+            seed: int=42) -> Generator[Adaboost, None, None]:
 
         np.random.seed(seed)
         cks = set(checkpoints) if checkpoints is not None else [self.n_clf]
@@ -317,7 +317,7 @@ class Distboost(Boosting):
             X: np.ndarray,
             y: np.ndarray,
             checkpoints: Optional[List[int]]=None,
-            seed: int=42) -> Generator[Distboost]:
+            seed: int=42) -> Generator[Distboost, None, None]:
 
         np.random.seed(seed)
         cks = set(checkpoints) if checkpoints is not None else [self.n_clf]
@@ -361,7 +361,7 @@ class Preweak(Boosting):
             X: np.ndarray,
             y: np.ndarray,
             checkpoints: Optional[List[int]]=None,
-            seed: int=42) -> Generator[Preweak]:
+            seed: int=42) -> Generator[Preweak, None, None]:
         
         np.random.seed(seed)
         cks = set(checkpoints) if checkpoints is not None else [self.n_clf]
@@ -407,7 +407,7 @@ class Preweak(Boosting):
 if __name__ == "__main__":
     
     MODEL_NAMES: List[str] = ["my_ada", "distboost", "preweak"]
-    options: Dict[str, Any] = manage_options()
+    options: Values = manage_options()
     print("Configuration:\n", json.dumps(vars(options), indent=4, sort_keys=True))
     assert options.model in MODEL_NAMES, "Model %s not supported!" %options.model
     
@@ -419,7 +419,7 @@ if __name__ == "__main__":
                    entity='mlgroup',
                    name="%s_%s" %(MODEL, DATASET),
                    tags=[DATASET, MODEL] + TAGS,
-                   config=options)
+                   config=options.__dict__)
     
     TEST_SIZE: float = options.test_size
     NORMALIZE: bool = options.normalize
@@ -448,6 +448,8 @@ if __name__ == "__main__":
         X_tr, y_tr = split_data_powerlaw(X_train, y_train, N_CLIENTS)
     else:
         raise ValueError("Unknown distribution %s." %DISTRIBUTION)
+
+    model: Boosting
 
     if MODEL == "my_ada": 
         model = Adaboost(max(N_ESTIMATORS), WEAK_LEARNER)
