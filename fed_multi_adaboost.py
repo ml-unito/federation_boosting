@@ -15,7 +15,7 @@ from sklearn.ensemble import AdaBoostClassifier
 from sklearn.datasets import load_svmlight_file
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
-from optparse import OptionParser
+from optparse import OptionParser, Values
 import json
 import wandb
 
@@ -28,7 +28,7 @@ WANDB = True
 #########################################################
 
 
-def manage_options() -> Dict[str, Any]:
+def manage_options() -> Values:
     parser = OptionParser(usage="usage: %prog [options] dataset",
                           version="%prog 0.1",
                           description="Testing Distboost and Preweak from Cooper et al. 2017 "\
@@ -64,7 +64,7 @@ def manage_options() -> Dict[str, Any]:
 
 def load_classification_dataset(name_or_path: str,
                                 test_size: float=0.1, #real range (0,1)
-                                seed: int=42) -> Tuple[np.ndarray, np.ndarray]:
+                                seed: int=42) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     #TODO: other datasets
     if name_or_path == "letter":
         df = pd.read_csv("data/letter.csv", header=None)
@@ -119,9 +119,9 @@ class MulticlassBoosting(Boosting):
                  n_clf: int=10,
                  clf_class: ClassifierMixin=DecisionTreeClassifier()):
         super(MulticlassBoosting, self).__init__(n_clf, clf_class)
-        self.K = None #to be defined in the fit method
+        self.K: Optional[int] = None #to be defined in the fit method
 
-    def predict(self: Boosting,
+    def predict(self: MulticlassBoosting,
                 X: np.ndarray) -> np.ndarray:
         y_pred = np.zeros((np.shape(X)[0], self.K))
         for i, clf in enumerate(self.clfs):
@@ -136,7 +136,7 @@ class Samme(MulticlassBoosting):
             X: np.ndarray,
             y: np.ndarray,
             checkpoints: Optional[List[int]]=None,
-            seed: int=42) -> Generator[Samme]:
+            seed: int=42) -> Generator[Samme, None, None]:
 
         np.random.seed(seed)
         self.K = len(set(y)) # assuming that all classes are in y
@@ -185,7 +185,7 @@ class DistSamme(MulticlassBoosting):
             X: np.ndarray,
             y: np.ndarray,
             checkpoints: Optional[List[int]]=None,
-            seed: int=42) -> Generator[DistSamme]:
+            seed: int=42) -> Generator[DistSamme, None, None]:
 
         np.random.seed(seed)
         self.K = len(set(np.concatenate(y))) # assuming that all classes are in y
@@ -229,7 +229,7 @@ class PreweakSamme(MulticlassBoosting):
             X: np.ndarray,
             y: np.ndarray,
             checkpoints: Optional[List[int]]=None,
-            seed: int=42) -> Generator[PreweakSamme]:
+            seed: int=42) -> Generator[PreweakSamme, None, None]:
         
         np.random.seed(seed)
         self.K = len(set(np.concatenate(y))) # assuming that all classes are in y
@@ -276,7 +276,7 @@ class PreweakSamme(MulticlassBoosting):
 if __name__ == "__main__":
     
     MODEL_NAMES: List[str] = ["samme", "distsamme", "preweaksamme"]
-    options: Dict[str, Any] = manage_options()
+    options: Values = manage_options()
     print("Configuration:\n", json.dumps(vars(options), indent=4, sort_keys=True))
     assert options.model in MODEL_NAMES, "Model %s not supported!" %options.model
     
@@ -288,7 +288,7 @@ if __name__ == "__main__":
                    entity='mlgroup',
                    name="%s_%s" %(MODEL, DATASET),
                    tags=[DATASET, MODEL] + TAGS,
-                   config=options)
+                   config=options.__dict__)
     
     TEST_SIZE: float = options.test_size
     NORMALIZE: bool = options.normalize
@@ -313,6 +313,8 @@ if __name__ == "__main__":
     X_tr, y_tr = split_dataset(X_train, y_train, N_CLIENTS)
     #X_tr, y_tr = split_data_powerlaw(X_train, y_train, N_CLIENTS)
 
+    model: MulticlassBoosting
+    
     if MODEL == "samme": 
         model = Samme(max(N_ESTIMATORS), WEAK_LEARNER)
         X_, y_ = X_train, y_train
