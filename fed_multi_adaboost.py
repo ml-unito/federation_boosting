@@ -159,6 +159,7 @@ class Samme(MulticlassBoosting):
             self.clfs.append(clf)
 
             if (t+1) in cks:
+                self.current_weak_error = min_error
                 yield self
 
 
@@ -221,6 +222,7 @@ class DistSamme(MulticlassBoosting):
                 d /= Dsum
 
             if (t+1) in cks:
+                self.current_weak_error = min_error
                 yield self
 
 
@@ -268,14 +270,75 @@ class PreweakSamme(MulticlassBoosting):
             D /= np.sum(D)
             self.clfs.append(top_model)
 
+
             if (t+1) in cks:
+                self.current_weak_error = min_error
                 yield self
+
+
+class AdaboostF1(MulticlassBoosting):
+
+    def federated_dist(self:AdaboostF1, D:np.ndarray, X:List[np.ndarray], j:int):
+        min_index = sum([len(X[i]) for i in range(j)])
+        D_ = D[min_index:min_index+X[j].shape[0]]
+        return D_ / sum(D_)
+
+
+    def fit(self: AdaboostF1,
+            X: List[np.ndarray],
+            y: List[np.ndarray],
+            checkpoints: Optional[List[int]]=None,
+            seed: int=42) -> Generator[AdaboostF1]:
+
+        np.random.seed(seed)
+        self.K = len(set(np.concatenate(y))) # assuming that all classes are in y
+        cks = set(checkpoints) if checkpoints is not None else [self.n_clf]
+
+        # merge the datasets into one (not possible in a real distributed/federated scenario)
+        X_ = np.vstack(X) 
+        y_ = np.concatenate(y)
+
+        n_samples = X_.shape[0]
+        D = np.full(n_samples, (1 / n_samples))
+
+        self.clfs = []
+        self.alpha = []
+
+        for t in range(self.n_clf):
+            fed_clfs = []
+            for j, X__ in enumerate(X):
+                D_ = self.federated_dist(D, X, j)
+                n_samples_ = X__.shape[0]
+
+                clf = deepcopy(self.clf_class)
+                ids = choice(n_samples_, size=n_samples_, replace=True, p=D_)
+                clf.fit(X__[ids], y[j][ids])
+                fed_clfs.append(clf)
+
+
+            errors = np.array([sum(D[y_ != clf.predict(X_)]) for clf in fed_clfs])
+            best_clf = fed_clfs[np.argmin(errors)]
+            min_error = errors[np.argmin(errors)]
+
+            predictions = best_clf.predict(X_)
+
+            self.alpha.append(log((1.0 - min_error) / (min_error + 1e-10)) + log(self.K-1)) # kind of additive smoothing
+            D *= np.exp(self.alpha[t] * (y_ != predictions))
+
+            D /= np.sum(D)
+            self.clfs.append(best_clf)
+
+
+            if (t+1) in cks:
+                self.current_weak_error = min_error
+                yield self
+
 
 
 
 if __name__ == "__main__":
     
-    MODEL_NAMES: List[str] = ["samme", "distsamme", "preweaksamme"]
+    MODEL_NAMES: List[str] = ["samme", "distsamme", "preweaksamme", "adaboostf1"]
     options: Values = manage_options()
     print("Configuration:\n", json.dumps(vars(options), indent=4, sort_keys=True))
     assert options.model in MODEL_NAMES, "Model %s not supported!" %options.model
@@ -311,7 +374,7 @@ if __name__ == "__main__":
     print("Training set size: %d" %X_train.shape[0])
     print("Test set size: %d" %X_test.shape[0])
     X_tr, y_tr = split_dataset(X_train, y_train, N_CLIENTS)
-    #X_tr, y_tr = split_data_powerlaw(X_train, y_train, N_CLIENTS)
+    X_, y_ = X_tr, y_tr
 
     model: MulticlassBoosting
     
@@ -320,10 +383,10 @@ if __name__ == "__main__":
         X_, y_ = X_train, y_train
     elif MODEL == "distsamme":
         model = DistSamme(max(N_ESTIMATORS), WEAK_LEARNER)
-        X_, y_ = X_tr, y_tr
     elif MODEL == "preweaksamme":
         model = PreweakSamme(max(N_ESTIMATORS), WEAK_LEARNER)
-        X_, y_ = X_tr, y_tr
+    elif MODEL == "adaboostf1":
+        model = AdaboostF1(max(N_ESTIMATORS), WEAK_LEARNER)
     else:
         raise ValueError("Unknown model %s." %MODEL)
 
@@ -339,7 +402,8 @@ if __name__ == "__main__":
                 "accuracy": accuracy_score(y_train, y_pred_tr), 
                 "precision": precision_score(y_train, y_pred_tr, average="micro"),
                 "recall": recall_score(y_train, y_pred_tr, average="micro"),
-                "f1": f1_score(y_train, y_pred_tr, average="micro")
+                "f1": f1_score(y_train, y_pred_tr, average="micro"),
+                "weak_error": strong_learner.current_weak_error
             },
             "test" : {
                 "n_estimators" : step,
