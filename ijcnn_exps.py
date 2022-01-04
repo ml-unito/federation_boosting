@@ -126,7 +126,7 @@ class MulticlassBoosting(Boosting):
         for i, clf in enumerate(self.clfs):
             pred = clf.predict(X)
             for j, c in enumerate(pred):
-                y_pred[j, c] += self.alpha[i]
+                y_pred[j, int(c)] += self.alpha[i]
         return np.argmax(y_pred, axis=1)
 
 
@@ -329,7 +329,8 @@ class AdaboostF1(MulticlassBoosting):
                 yield self
 
 
-def distribute_dataset(X, y, n, non_iidness):
+def distribute_dataset(X, y, n, non_iidness, seed):
+    np.random.seed(seed)
     if non_iidness == 0:
         return split_dataset(X, y, n)
     elif non_iidness == 1:
@@ -374,7 +375,7 @@ if __name__ == "__main__":
     NON_IIDNESS = options.non_iidness
 
     WEAK_LEARNER = DecisionTreeClassifier(random_state=SEED, max_leaf_nodes=10)
-    N_ESTIMATORS: List[int] = [1] + list(range(10, 301, 10))
+    N_ESTIMATORS: List[int] = [1] #+ list(range(10, 301, 10))
     METRICS: List[str] = ["accuracy", "precision", "recall", "f1"]
 
     X_train, X_test, y_train, y_test = load_classification_dataset(name=DATASET,
@@ -388,7 +389,8 @@ if __name__ == "__main__":
     print("# weak learners: %s" %N_ESTIMATORS)
     print("Training set size: %d" %X_train.shape[0])
     print("Test set size: %d" %X_test.shape[0])
-    X_tr, y_tr = distribute_dataset(X_train, y_train, N_CLIENTS, NON_IIDNESS)
+    print("# classes: %d" %len(set(y_train)))
+    X_tr, y_tr = distribute_dataset(X_train, y_train, N_CLIENTS, NON_IIDNESS, SEED)
 
     if MODEL == "samme": 
         model = Samme(max(N_ESTIMATORS), WEAK_LEARNER)
@@ -429,6 +431,6 @@ if __name__ == "__main__":
         }
 
         if WANDB: wandb.log(log_dict, step=step)
-        else: print(log_dict)
+        else: print(json.dumps(log_dict, indent=4, sort_keys=True))
 
     print("Training complete!")
