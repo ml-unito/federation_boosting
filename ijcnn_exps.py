@@ -13,6 +13,11 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.datasets import load_svmlight_file
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
+
+from rich.traceback import install
+install()
+from rich import print
+
 from optparse import OptionParser
 import json
 import wandb
