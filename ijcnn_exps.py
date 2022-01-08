@@ -420,8 +420,8 @@ def run(dataset: Datasets = typer.Argument(...),
     console.log("Configuration:", locals())
     # assert model in MODEL_NAMES, "Model %s not supported!" %model
     
-    MODEL: str = str(model)
-    DATASET: str = str(dataset)
+    MODEL: str = model.value
+    DATASET: str = dataset.value
     TAGS: List[str] = tags.split(",")
     if WANDB:
         wandb.init(project='FederatedAdaboost',
