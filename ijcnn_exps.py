@@ -13,67 +13,50 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.datasets import load_svmlight_file
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
+from typing import Annotated
 
 from rich.traceback import install
-install()
-from rich import print
+from rich.console import Console
+install(show_locals=True)
 
 from optparse import OptionParser
 import json
 import wandb
 import noniid
+import typer
+from enum import Enum
+
+app = typer.Typer()
+console = Console()
 
 from fed_adaboost import Boosting, split_dataset
 
+# Enum type for samme, distsamme,preweaksamme and adaboost.f1
+class FedAlgorithms(Enum):
+    samme = "samme"
+    distsamme = "distsamme"
+    preweaksamme = "preweaksamme"
+    adaboost = "adaboost"
+
+# Enum type for datasets: adult, letter, forestcover, splice, vehicle, vowel, segmentation, kr-vs-kp, sat and pendigits
+class Datasets(Enum):
+    adult = "adult"
+    letter = "letter"
+    forestcover = "forestcover"
+    splice = "splice"
+    vehicle = "vehicle"
+    vowel = "vowel"
+    segmentation = "segmentation"
+    kr_vs_kp = "kr-vs-kp"
+    sat = "sat"
+    pendigits = "pendigits"
+    
 ####################### ATTENTION #######################
 # Set WANDB to True if you want to use Weights & biases #
 #########################################################
 WANDB = False                                           
 #########################################################
 RANDOM_SEEDS = [98765, 12345, 999999, 101010, 765432, 171717, 13579, 24680]
-
-def manage_options() -> Dict[str, Any]:
-    parser = OptionParser(usage="usage: %prog [options] dataset",
-                          version="%prog 0.1",
-                          description="Testing Samme, Distboost and Preweak adaptation of Samme (Cooper et al. 2017) "\
-                          "as well as Adaboost.F1 (Polato, Esposito, et al. 2022) for multi-class classification. "\
-                          "Supported dataset: adult, letter, forestcover, splice, vehicle, vowel, "\
-                          "segmentation, kr-vs-kp, sat and pendigits")
-    parser.add_option("-s", "--seed",
-                      dest="seed", default=0, type="int", 
-                      help="Pseudo-random seed for replicability purposes - default=98765. Seeds from 0 to 7 are automatically"\
-                           "mapped to 'better' seeds.")
-    parser.add_option("-t", "--test_size",
-                      dest="test_size", default=.2, type="float",
-                      help="Test set size in percentage (0,1) - default=0.2")
-    parser.add_option("-n", "--nclients",
-                      dest="n_clients", default=10, type="int",
-                      help="Number of clients (>= 1) - default=10")
-    parser.add_option("-m", "--model",
-                      dest="model", default="adaboost", type="str",
-                      help="The model to train and test. Supported models: samme, distsamme, "\
-                           "preweaksamme and adaboost.f1 - default=samme")
-    parser.add_option("-z", "--normalize",
-                      dest="normalize", default=False, action="store_true",
-                      help="Whether the instances has to be normalized or not - default=False")
-    parser.add_option("-d", "--noniid",
-                      dest="non_iidness", default=False, type="int",
-                      help="Whether the instances have to be distributed in a non-iid way - default=0.\n" \
-                            "0 - uniform distribution (iid); \n" \
-                            "1 - examples' quantity skewness;\n" \
-                            "2 - labels skewness;\n" \
-                            "3 - Dirichlet distributed labels skewness;\n" \
-                            "4 - pathological labels skewness; \n" \
-                            "5 - covariate shift.")
-    parser.add_option("-l", "--labels",
-                      dest="tags", default="", type="str",
-                      help="list of comma separated tags to be added in the wandb lod - default=''")
-    (options, args) = parser.parse_args()
-    if len(args) < 1:
-        print("Dataset argument missing. Please check the documentation: `python fed_multi_adaboost.py -h`")
-        exit(0)
-    options.dataset = args[0]
-    return options
 
 
 def load_classification_dataset(name: str,
@@ -356,16 +339,90 @@ def distribute_dataset(X, y, n, non_iidness, seed):
     return X_tr, y_tr
 
 
-if __name__ == "__main__":
+# def manage_options() -> Dict[str, Any]:
+#     parser = OptionParser(usage="usage: %prog [options] dataset",
+#                           version="%prog 0.1",
+#                           description="Testing Samme, Distboost and Preweak adaptation of Samme (Cooper et al. 2017) "
+#                           "as well as Adaboost.F1 (Polato, Esposito, et al. 2022) for multi-class classification. "
+#                           "Supported dataset: adult, letter, forestcover, splice, vehicle, vowel, "
+#                           "segmentation, kr-vs-kp, sat and pendigits")
+#     parser.add_option("-s", "--seed",
+#                       dest="seed", default=0, type="int",
+#                       help="Pseudo-random seed for replicability purposes - default=98765. Seeds from 0 to 7 are automatically"
+#                            "mapped to 'better' seeds.")
+#     parser.add_option("-t", "--test_size",
+#                       dest="test_size", default=.2, type="float",
+#                       help="Test set size in percentage (0,1) - default=0.2")
+#     parser.add_option("-n", "--nclients",
+#                       dest="n_clients", default=10, type="int",
+#                       help="Number of clients (>= 1) - default=10")
+#     parser.add_option("-m", "--model",
+#                       dest="model", default="adaboost", type="str",
+#                       help="The model to train and test. Supported models: samme, distsamme, "
+#                            "preweaksamme and adaboost.f1 - default=samme")
+#     parser.add_option("-z", "--normalize",
+#                       dest="normalize", default=False, action="store_true",
+#                       help="Whether the instances has to be normalized or not - default=False")
+#     parser.add_option("-d", "--noniid",
+#                       dest="non_iidness", default=False, type="int",
+#                       help="Whether the instances have to be distributed in a non-iid way - default=0.\n"
+#                             "0 - uniform distribution (iid); \n"
+#                             "1 - examples' quantity skewness;\n"
+#                             "2 - labels skewness;\n"
+#                             "3 - Dirichlet distributed labels skewness;\n"
+#                             "4 - pathological labels skewness; \n"
+#                             "5 - covariate shift.")
+#     parser.add_option("-l", "--labels",
+#                       dest="tags", default="", type="str",
+#                       help="list of comma separated tags to be added in the wandb lod - default=''")
+#     (options, args) = parser.parse_args()
+#     if len(args) < 1:
+#         print("Dataset argument missing. Please check the documentation: `python fed_multi_adaboost.py -h`")
+#         exit(0)
+#     options.dataset = args[0]
+#     return options
+
+@app.command()
+def run(dataset: Datasets = typer.Argument(...), 
+        seed: int = typer.Option(0, 
+                                help="Pseudo-random seed for replicability purposes - default=98765. Seeds from"
+                                     " 0 to 7 are automatically mapped to 'better' seeds."),
+        test_size:float=typer.Option(0.2,
+                                help="Test set size in percentage (0,1)"), 
+        n_clients:int=typer.Option(10,
+                                help="Number of clients (>= 1)"),
+        model:FedAlgorithms=typer.Option("samme", 
+                                 help="The model to train and test."),
+        normalize:bool=typer.Option(False, help="Whether the instances has to be normalized or not"),                                
+        non_iidness:int=typer.Option(0, help="Whether the instances have to be distributed in a non-iid way."),
+        tags:str=typer.Option("", help="list of comma separated tags to be added in the wandb lod")):
+    """
+    Testing Samme, Distboost and Preweak adaptation of Samme (Cooper et al. 2017) "
+    as well as Adaboost.F1 (Polato, Esposito, et al. 2022) for multi-class classification. "
+
+    The non_iidness parameters allows one to set the kind of noniiidness to be used as an integer in [0,5].
+    Values correspond to the following non_iidness:
+
+    0 - uniform distribution (iid);
     
-    MODEL_NAMES: List[str] = ["samme", "distsamme", "preweaksamme", "adaboost.f1"]
-    options: Dict[str, Any] = manage_options()
-    print("Configuration:\n", json.dumps(vars(options), indent=4, sort_keys=True))
-    assert options.model in MODEL_NAMES, "Model %s not supported!" %options.model
+    1 - examples' quantity skewness;
     
-    MODEL: str = options.model
-    DATASET: str = options.dataset
-    TAGS: List[str] = options.tags.split(",")
+    2 - labels skewness;
+    
+    3 - Dirichlet distributed labels skewness;
+    
+    4 - pathological labels skewness; 
+    
+    5 - covariate shift.
+    """
+
+
+    console.log("Configuration:", locals())
+    # assert model in MODEL_NAMES, "Model %s not supported!" %model
+    
+    MODEL: str = str(model)
+    DATASET: str = str(dataset)
+    TAGS: List[str] = tags.split(",")
     if WANDB:
         wandb.init(project='FederatedAdaboost',
                    entity='mlgroup',
@@ -373,11 +430,11 @@ if __name__ == "__main__":
                    tags=[DATASET, MODEL] + TAGS,
                    config=options)
     
-    TEST_SIZE: float = options.test_size
-    NORMALIZE: bool = options.normalize
-    N_CLIENTS: int = options.n_clients
-    SEED: int = RANDOM_SEEDS[options.seed] if options.seed < 8 else options.seed
-    NON_IIDNESS = options.non_iidness
+    TEST_SIZE: float = test_size
+    NORMALIZE: bool = normalize
+    N_CLIENTS: int = n_clients
+    SEED: int = RANDOM_SEEDS[seed] if seed < 8 else seed
+    NON_IIDNESS = non_iidness
 
     WEAK_LEARNER = DecisionTreeClassifier(random_state=SEED, max_leaf_nodes=10)
     N_ESTIMATORS: List[int] = [1] #+ list(range(10, 301, 10))
@@ -391,10 +448,10 @@ if __name__ == "__main__":
         X_train = scaler.transform(X_train)
         X_test = scaler.transform(X_test)
 
-    print("# weak learners: %s" %N_ESTIMATORS)
-    print("Training set size: %d" %X_train.shape[0])
-    print("Test set size: %d" %X_test.shape[0])
-    print("# classes: %d" %len(set(y_train)))
+    console.log("# weak learners: %s" %N_ESTIMATORS)
+    console.log("Training set size: %d" %X_train.shape[0])
+    console.log("Test set size: %d" %X_test.shape[0])
+    console.log("# classes: %d" %len(set(y_train)))
     X_tr, y_tr = distribute_dataset(X_train, y_train, N_CLIENTS, NON_IIDNESS, SEED)
 
     if MODEL == "samme": 
@@ -412,7 +469,7 @@ if __name__ == "__main__":
     else:
         raise ValueError("Unknown model %s." %MODEL)
 
-    print("Training...")
+    console.log("Training...")
     for strong_learner in model.fit(X_, y_, N_ESTIMATORS):
         y_pred_tr = strong_learner.predict(X_train)
         y_pred_te = strong_learner.predict(X_test)
@@ -436,6 +493,10 @@ if __name__ == "__main__":
         }
 
         if WANDB: wandb.log(log_dict, step=step)
-        else: print(json.dumps(log_dict, indent=4, sort_keys=True))
+        else: console.log(log_dict)
 
-    print("Training complete!")
+    console.log("Training complete!")
+
+
+if __name__ == "__main__":
+    typer.run(run)
