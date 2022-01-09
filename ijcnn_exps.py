@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import division, print_function, annotations
-from os import name
-from typing import Any, Tuple, Dict, List, Generator, Optional
+from typing import Tuple, List, Generator, Optional
 from copy import deepcopy
 from math import log
 import pandas as pd
@@ -19,11 +18,10 @@ from rich.traceback import install
 from rich.console import Console
 
 from optparse import OptionParser
-import json
 import wandb
 import noniid
 import typer
-from enum import Enum, IntEnum
+from enum import Enum
 
 # Handlers
 
@@ -376,18 +374,20 @@ def run(dataset: Datasets = typer.Argument(...),
     as well as Adaboost.F1 (Polato, Esposito, et al. 2022) for multi-class classification. "
     """
 
-
-    console.log("Configuration:", locals(), style="bold green")
-    # assert model in MODEL_NAMES, "Model %s not supported!" %model
+    options = locals()
     
     MODEL: str = model.value
     DATASET: str = dataset.value
-    TAGS: List[str] = tags.split(",")
+    TAGS: List[str] = [DATASET, MODEL, non_iidness.value]
+    TAGS += tags.split(",") if "," in tags else []
+    options["tags"] = TAGS
+
+    console.log("Configuration:", options, style="bold green")
     if WANDB:
         wandb.init(project='FederatedAdaboost',
                    entity='mlgroup',
                    name="%s_%s" %(MODEL, DATASET),
-                   tags=[DATASET, MODEL] + TAGS,
+                   tags=TAGS,
                    config=options)
     
     TEST_SIZE: float = test_size
@@ -398,7 +398,6 @@ def run(dataset: Datasets = typer.Argument(...),
 
     WEAK_LEARNER = DecisionTreeClassifier(random_state=SEED, max_leaf_nodes=10)
     N_ESTIMATORS: List[int] = [1] #+ list(range(10, 301, 10))
-    METRICS: List[str] = ["accuracy", "precision", "recall", "f1"]
 
     X_train, X_test, y_train, y_test = load_classification_dataset(name=DATASET,
                                                                    test_size=TEST_SIZE,
