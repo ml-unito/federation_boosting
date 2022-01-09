@@ -2,7 +2,7 @@
 from __future__ import division, print_function, annotations
 from typing import Tuple, List, Generator, Optional
 from copy import deepcopy
-from math import log
+from math import log, ceil
 import pandas as pd
 import numpy as np
 from numpy.random import choice
@@ -340,7 +340,8 @@ def distribute_dataset(X, y, n, non_iidness, seed):
     elif non_iidness == Noniidness.num_examples_skw:
         ass = noniid.quantity_skew(X, y, n)
     elif non_iidness == Noniidness.lbl_skw:
-        ass = noniid.quantity_skew_lbl(X, y, n, class_per_client=2)
+        nxc = max(2, ceil(len(set(y)) / n))
+        ass = noniid.quantity_skew_lbl(X, y, n, class_per_client=nxc)
     elif non_iidness == Noniidness.dirichlet_lbl_skw:
         ass = noniid.dist_skew_lbl(X, y, n, beta=.5)
     elif non_iidness == Noniidness.pathological_skw:
