@@ -12,7 +12,7 @@ SEEDS = [0, 1, 2, 3]
 MODELS = "samme,distsamme,preweaksamme,adaboost.f1".split(",")
 NONIID = "uniform,num_examples_skw,lbl_skw,dirichlet_lbl_skw,pathological_skw,covariate_shift".split(",")
 
-def experiment_to_skip(ds, seed, model, noniid):
+def experiment_to_skip(ds, seed, model, noniid, verbose):
     """
     Returns True if the experiment should be skipped.
     Presently: datasets "adult" e "kr-vs-kp" should be skipped when iidness is in 
@@ -22,18 +22,21 @@ def experiment_to_skip(ds, seed, model, noniid):
         a problem in how the data are split in some cases.
     """
     if ds in ["adult", "kr-vs-kp"] and noniid in ["lbl_skw", "dirichlet_lbl_skw", "pathological_skw"]:
-        console.log(f"Skipping {ds} {seed} {model} {noniid}", style="yellow")
+        if verbose:
+            console.log(f"[bold yellow]Skipping[/] {ds} {seed} {model} {noniid}")
+
         return True
 
     if noniid == "pathological_skw":
-        console.log(f"Skipping {ds} {seed} {model} {noniid}", style="yellow")
+        if verbose:
+            console.log(f"[bold yellow]Skipping[/] {ds} {seed} {model} {noniid}")
         return True
 
     return False
     
 
 @app.command()
-def main(outfile:str=typer.Argument("Makefile")):
+def main(outfile:str=typer.Argument("Makefile"), verbose:bool=False):
     """
     Generates a Makefile allowing to launch the experiments presented in  (Polato, Esposito, et al. 2022)
     """
@@ -45,7 +48,7 @@ def main(outfile:str=typer.Argument("Makefile")):
         for experiment in experiments:
             ds, seed, model, noniid = experiment
 
-            if experiment_to_skip(ds, seed, model, noniid):
+            if experiment_to_skip(ds, seed, model, noniid, verbose):
                 continue
 
             experiment_tags.append(f"logs/ijcnnexps_ds_{ds}_model_{model}_noniid_{noniid}_seed_{seed}.log")
