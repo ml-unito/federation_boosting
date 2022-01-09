@@ -357,49 +357,6 @@ def distribute_dataset(X, y, n, non_iidness, seed):
     return X_tr, y_tr
 
 
-# def manage_options() -> Dict[str, Any]:
-#     parser = OptionParser(usage="usage: %prog [options] dataset",
-#                           version="%prog 0.1",
-#                           description="Testing Samme, Distboost and Preweak adaptation of Samme (Cooper et al. 2017) "
-#                           "as well as Adaboost.F1 (Polato, Esposito, et al. 2022) for multi-class classification. "
-#                           "Supported dataset: adult, letter, forestcover, splice, vehicle, vowel, "
-#                           "segmentation, kr-vs-kp, sat and pendigits")
-#     parser.add_option("-s", "--seed",
-#                       dest="seed", default=0, type="int",
-#                       help="Pseudo-random seed for replicability purposes - default=98765. Seeds from 0 to 7 are automatically"
-#                            "mapped to 'better' seeds.")
-#     parser.add_option("-t", "--test_size",
-#                       dest="test_size", default=.2, type="float",
-#                       help="Test set size in percentage (0,1) - default=0.2")
-#     parser.add_option("-n", "--nclients",
-#                       dest="n_clients", default=10, type="int",
-#                       help="Number of clients (>= 1) - default=10")
-#     parser.add_option("-m", "--model",
-#                       dest="model", default="adaboost", type="str",
-#                       help="The model to train and test. Supported models: samme, distsamme, "
-#                            "preweaksamme and adaboost.f1 - default=samme")
-#     parser.add_option("-z", "--normalize",
-#                       dest="normalize", default=False, action="store_true",
-#                       help="Whether the instances has to be normalized or not - default=False")
-#     parser.add_option("-d", "--noniid",
-#                       dest="non_iidness", default=False, type="int",
-#                       help="Whether the instances have to be distributed in a non-iid way - default=0.\n"
-#                             "0 - uniform distribution (iid); \n"
-#                             "1 - examples' quantity skewness;\n"
-#                             "2 - labels skewness;\n"
-#                             "3 - Dirichlet distributed labels skewness;\n"
-#                             "4 - pathological labels skewness; \n"
-#                             "5 - covariate shift.")
-#     parser.add_option("-l", "--labels",
-#                       dest="tags", default="", type="str",
-#                       help="list of comma separated tags to be added in the wandb lod - default=''")
-#     (options, args) = parser.parse_args()
-#     if len(args) < 1:
-#         print("Dataset argument missing. Please check the documentation: `python fed_multi_adaboost.py -h`")
-#         exit(0)
-#     options.dataset = args[0]
-#     return options
-
 @app.command()
 def run(dataset: Datasets = typer.Argument(...), 
         seed: int = typer.Option(0, 
