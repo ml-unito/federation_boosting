@@ -45,6 +45,34 @@ def quantity_skew(X: np.ndarray,
     return [np.where(assignment == i)[0] for i in range(n)]
 
 
+def class_wise_quantity_skew(X: np.ndarray,
+                             y: np.ndarray,
+                             n: int,
+                             min_quantity: int=2,
+                             alpha: float=4.) -> List[np.ndarray]:
+    assert min_quantity*n <= X.shape[0], "# of instances must be > than min_quantity*n"
+    assert min_quantity > 0, "min_quantity must be >= 1"
+    labels = list(range(len(set(y))))
+    lens = [np.where(y == l)[0].shape[0] for l in labels]
+    min_lbl = min(lens)
+    assert min_lbl >= n, "Under represented class!"
+
+    s = [np.array(power(alpha, lens[c] - n) * n, dtype=int) for c in labels]
+    assignment = []
+    for c in labels:
+        ass = np.concatenate([s[c], list(range(n))])
+        shuffle(ass)
+        assignment.append(ass)
+
+    res = [[] for _ in range(n)]
+    for c in labels:
+        idc = np.where(y == c)[0]
+        for i in range(n):
+            res[i] += list(idc[np.where(assignment[c] == i)[0]])
+
+    return [np.array(r, dtype=int) for r in res]
+
+
 def quantity_skew_lbl(X: np.ndarray,
                       y: np.ndarray,
                       n: int,

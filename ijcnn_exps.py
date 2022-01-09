@@ -339,7 +339,8 @@ def distribute_dataset(X, y, n, non_iidness, seed):
     if non_iidness == Noniidness.uniform:
         return split_dataset(X, y, n)
     elif non_iidness == Noniidness.num_examples_skw:
-        ass = noniid.quantity_skew(X, y, n)
+        #ass = noniid.quantity_skew(X, y, n)
+        ass = noniid.class_wise_quantity_skew(X, y, n)
     elif non_iidness == Noniidness.lbl_skw:
         nxc = max(2, ceil(len(set(y)) / n))
         ass = noniid.quantity_skew_lbl(X, y, n, class_per_client=nxc)
