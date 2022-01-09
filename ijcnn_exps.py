@@ -113,6 +113,7 @@ def load_classification_dataset(name: str,
         X, y = load_svmlight_file("data/" + name + ".svmlight")
         X = X.toarray()
         y = y.astype("int")
+        y = LabelEncoder().fit_transform(y)
 
     return train_test_split(X, y, test_size=test_size, random_state=seed)
 
