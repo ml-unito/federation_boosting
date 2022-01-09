@@ -17,17 +17,19 @@ from typing import Annotated
 
 from rich.traceback import install
 from rich.console import Console
-install(show_locals=True)
 
 from optparse import OptionParser
 import json
 import wandb
 import noniid
 import typer
-from enum import Enum
+from enum import Enum, IntEnum
+
+# Handlers
 
 app = typer.Typer()
-console = Console()
+console = Console(record=True)
+install(show_locals=False)
 
 from fed_adaboost import Boosting, split_dataset
 
@@ -36,7 +38,7 @@ class FedAlgorithms(Enum):
     samme = "samme"
     distsamme = "distsamme"
     preweaksamme = "preweaksamme"
-    adaboost = "adaboost"
+    adaboost = "adaboost.f1"
 
 # Enum type for datasets: adult, letter, forestcover, splice, vehicle, vowel, segmentation, kr-vs-kp, sat and pendigits
 class Datasets(Enum):
@@ -50,7 +52,23 @@ class Datasets(Enum):
     kr_vs_kp = "kr-vs-kp"
     sat = "sat"
     pendigits = "pendigits"
-    
+
+# Enum types for noniidness kinds
+#    0 - uniform distribution (iid)
+#    1 - examples' quantity skewness
+#    2 - labels skewness
+#    3 - Dirichlet distributed labels skewness
+#    4 - pathological labels skewness
+#    5 - covariate shift.
+class Noniidness(Enum):
+    uniform = "uniform"
+    num_examples_skw = "num_examples_skw"
+    lbl_skw = "lbl_skw"
+    dirichlet_lbl_skw = "dirichlet_lbl_skw"
+    pathological_skw = "pathological_skw"
+    covariate_shift = "covariate_shift"
+
+
 ####################### ATTENTION #######################
 # Set WANDB to True if you want to use Weights & biases #
 #########################################################
@@ -319,17 +337,17 @@ class AdaboostF1(MulticlassBoosting):
 
 def distribute_dataset(X, y, n, non_iidness, seed):
     np.random.seed(seed)
-    if non_iidness == 0:
+    if non_iidness == Noniidness.uniform:
         return split_dataset(X, y, n)
-    elif non_iidness == 1:
+    elif non_iidness == Noniidness.num_examples_skw:
         ass = noniid.quantity_skew(X, y, n)
-    elif non_iidness == 2:
+    elif non_iidness == Noniidness.lbl_skw:
         ass = noniid.quantity_skew_lbl(X, y, n, class_per_client=2)
-    elif non_iidness == 3:
+    elif non_iidness == Noniidness.dirichlet_lbl_skw:
         ass = noniid.dist_skew_lbl(X, y, n, beta=.5)
-    elif non_iidness == 4:
+    elif non_iidness == Noniidness.pathological_skw:
         ass = noniid.pathological_dist_skew_lbl(X, y, n, shards_per_client=2)
-    elif non_iidness == 5:
+    elif non_iidness == Noniidness.covariate_shift:
         ass = noniid.covariate_shift(X, y, n, modes=2)
     else:
         raise ValueError("Unknown non_iidness code %d!" %non_iidness)
@@ -394,30 +412,15 @@ def run(dataset: Datasets = typer.Argument(...),
         model:FedAlgorithms=typer.Option("samme", 
                                  help="The model to train and test."),
         normalize:bool=typer.Option(False, help="Whether the instances has to be normalized or not"),                                
-        non_iidness:int=typer.Option(0, help="Whether the instances have to be distributed in a non-iid way."),
+        non_iidness:Noniidness=typer.Option("uniform", help="Whether the instances have to be distributed in a non-iid way."),
         tags:str=typer.Option("", help="list of comma separated tags to be added in the wandb lod")):
     """
     Testing Samme, Distboost and Preweak adaptation of Samme (Cooper et al. 2017) "
     as well as Adaboost.F1 (Polato, Esposito, et al. 2022) for multi-class classification. "
-
-    The non_iidness parameters allows one to set the kind of noniiidness to be used as an integer in [0,5].
-    Values correspond to the following non_iidness:
-
-    0 - uniform distribution (iid);
-    
-    1 - examples' quantity skewness;
-    
-    2 - labels skewness;
-    
-    3 - Dirichlet distributed labels skewness;
-    
-    4 - pathological labels skewness; 
-    
-    5 - covariate shift.
     """
 
 
-    console.log("Configuration:", locals())
+    console.log("Configuration:", locals(), style="bold green")
     # assert model in MODEL_NAMES, "Model %s not supported!" %model
     
     MODEL: str = model.value
@@ -448,10 +451,10 @@ def run(dataset: Datasets = typer.Argument(...),
         X_train = scaler.transform(X_train)
         X_test = scaler.transform(X_test)
 
-    console.log("# weak learners: %s" %N_ESTIMATORS)
-    console.log("Training set size: %d" %X_train.shape[0])
-    console.log("Test set size: %d" %X_test.shape[0])
-    console.log("# classes: %d" %len(set(y_train)))
+    console.log(f"# weak learners: {N_ESTIMATORS}", style="italic")
+    console.log(f"Training set size: {X_train.shape[0]}", style="italic")
+    console.log(f"Test set size: {X_test.shape[0]}", style="italic")
+    console.log(f"# classes: {len(set(y_train))}", style="italic")
     X_tr, y_tr = distribute_dataset(X_train, y_train, N_CLIENTS, NON_IIDNESS, SEED)
 
     if MODEL == "samme": 
@@ -469,7 +472,7 @@ def run(dataset: Datasets = typer.Argument(...),
     else:
         raise ValueError("Unknown model %s." %MODEL)
 
-    console.log("Training...")
+    console.log("Training...", style = "bold green")
     for strong_learner in model.fit(X_, y_, N_ESTIMATORS):
         y_pred_tr = strong_learner.predict(X_train)
         y_pred_te = strong_learner.predict(X_test)
@@ -496,7 +499,8 @@ def run(dataset: Datasets = typer.Argument(...),
         else: console.log(log_dict)
 
     console.log("Training complete!")
-
+    console.save_text(
+        f"logs/ijcnnexps_ds_{DATASET}_model_{MODEL}_noniid_{NON_IIDNESS.value}_seed_{seed}.log")
 
 if __name__ == "__main__":
     typer.run(run)
