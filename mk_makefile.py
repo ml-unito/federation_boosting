@@ -12,6 +12,25 @@ SEEDS = [0, 1, 2, 3]
 MODELS = "samme,distsamme,preweaksamme,adaboost.f1".split(",")
 NONIID = "uniform,num_examples_skw,lbl_skw,dirichlet_lbl_skw,pathological_skw,covariate_shift".split(",")
 
+def experiment_to_skip(ds, seed, model, noniid):
+    """
+    Returns True if the experiment should be skipped.
+    Presently: datasets "adult" e "kr-vs-kp" should be skipped when iidness is in 
+        "lbl_skw", "dirichlet_lbl_skw", "pathological_skw" (these are binary datasets which cannot
+        work with these types of non-iidness)
+    In addition: if noniid is "pathological_skw", then we are avoiding the experiments since there is
+        a problem in how the data are split in some cases.
+    """
+    if ds in ["adult", "kr-vs-kp"] and noniid in ["lbl_skw", "dirichlet_lbl_skw", "pathological_skw"]:
+        console.log(f"Skipping {ds} {seed} {model} {noniid}", style="yellow")
+        return True
+
+    if noniid == "pathological_skw":
+        console.log(f"Skipping {ds} {seed} {model} {noniid}", style="yellow")
+        return True
+
+    return False
+    
 
 @app.command()
 def main(outfile:str=typer.Argument("Makefile")):
@@ -25,13 +44,19 @@ def main(outfile:str=typer.Argument("Makefile")):
         experiment_tags = []
         for experiment in experiments:
             ds, seed, model, noniid = experiment
-            experiment_tags.append(
-                "logs/ijcnnexps_ds_{}_model_{}_noniid_{}_seed_{}.log".format(ds, model, noniid, seed))
-            print("{}:".format(experiment_tags[-1]), file=f)
-            print("\tpython3 ijcnn_exps.py --seed={} --n-clients=10 --model={} --non-iidness={} --tags=IJCNN {}".format(seed, model, noniid, ds), file=f)
 
+            if experiment_to_skip(ds, seed, model, noniid):
+                continue
 
-        print("all:{}".format(" ".join(experiment_tags)), file=f)
+            experiment_tags.append(f"logs/ijcnnexps_ds_{ds}_model_{model}_noniid_{noniid}_seed_{seed}.log")
+            print(f"{experiment_tags[-1]}:", file=f)
+            print(f"\tpython3 ijcnn_exps.py --seed={seed} --n-clients=10 --model={model} --non-iidness={noniid} --tags=IJCNN {ds}", file=f)
+
+        exp_tags_str = " ".join(experiment_tags)
+        print(f"all:{exp_tags_str}", file=f)
+
+        print(f"clean_all_logs:", file=f)
+        print(f"\trm -f logs/*.log", file=f)
 
 
 if __name__ == '__main__':
