@@ -14,7 +14,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from typing import Annotated
 
-from rich.traceback import install
+import rich.traceback as traceback
 from rich.console import Console
 
 from optparse import OptionParser
@@ -27,7 +27,7 @@ from enum import Enum
 
 app = typer.Typer()
 console = Console(record=True)
-install(show_locals=False)
+traceback.install(show_locals=True)
 
 from fed_adaboost import Boosting, split_dataset
 
