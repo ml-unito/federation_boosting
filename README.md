@@ -11,28 +11,40 @@ Install the requirements through PyPi using the following command:
 `pip install -r requirements.txt`
 
 ## Usage
-`python fed_adaboost.py [options] dataset`
+
+```
+Usage: ijcnn_exps.py [OPTIONS] DATASET:{adult|letter|forestcover|splice|vehicl
+                     e|vowel|segmentation|kr-vs-kp|sat|pendigits}
+
+Arguments:
+  DATASET:{adult|letter|forestcover|splice|vehicle|vowel|segmentation|kr-vs-kp|sat|pendigits}
+                                  [required]
 
 Options:
-
-* `--version` \
-    Show program's version number and exit
-* `-h`, `--help` \
-    Show "this" help message and exit
-* `-s SEED`, `--seed=SEED` \
-    Pseudo-random seed for replicability purposes - default=42
-* `-t TEST_SIZE`, `--test_size=TEST_SIZE` \
-    Test set size in percentage (0,1) - default=0.1
-* `-n N_CLIENTS`, `--nclients=N_CLIENTS` \
-    Number of clients (>= 1) - default=10
-* `-z`, `--normalize`\
-    Whether the instances has to be normalized (standard scaling) or not - default=False
-* `-o`, `--output`\
-    Whether the results has to be saved on a JSON file - default=False
-
-
-**Supported datasets**: breast, mnistXY, sonar, ionospehere, banknote, spambase, particle, and forestcover12. Note that mnistXY is a binary classification subset of MNIST in which X is a digit and Y is another digit with X,Y in {0, 1, ..., 9}. The `test_size` argument is ignored for the mnist, particle and the forestcover12
-datasets for which it is used a default split size. The dataset can be also a path to a svmlight file.
+  --seed INTEGER                  Pseudo-random seed for replicability
+                                  purposes - default=98765. Seeds from 0 to 7
+                                  are automatically mapped to 'better' seeds.
+                                  [default: 0]
+  --test-size FLOAT               Test set size in percentage (0,1)  [default:
+                                  0.2]
+  --n-clients INTEGER             Number of clients (>= 1)  [default: 10]
+  --model [samme|distsamme|preweaksamme|adaboost.f1]
+                                  The model to train and test.  [default:
+                                  samme]
+  --normalize / --no-normalize    Whether the instances has to be normalized
+                                  or not  [default: no-normalize]
+  --non-iidness [uniform|num_examples_skw|lbl_skw|dirichlet_lbl_skw|pathological_skw|covariate_shift]
+                                  Whether the instances have to be distributed
+                                  in a non-iid way.  [default: uniform]
+  --tags TEXT                     list of comma separated tags to be added in
+                                  the wandb lod
+  --install-completion [bash|zsh|fish|powershell|pwsh]
+                                  Install completion for the specified shell.
+  --show-completion [bash|zsh|fish|powershell|pwsh]
+                                  Show completion for the specified shell, to
+                                  copy it or customize the installation.
+  --help                          Show this message and exit.
+```
 
 ## References
 <a id="1">[1]</a>
