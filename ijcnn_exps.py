@@ -66,12 +66,6 @@ class Noniidness(Enum):
     pathological_skw = "pathological_skw"
     covariate_shift = "covariate_shift"
 
-
-####################### ATTENTION #######################
-# Set WANDB to True if you want to use Weights & biases #
-#########################################################
-WANDB = False                                           
-#########################################################
 RANDOM_SEEDS = [98765, 12345, 999999, 101010, 765432, 171717, 13579, 24680]
 
 
@@ -371,7 +365,8 @@ def run(dataset: Datasets = typer.Argument(...),
                                  help="The model to train and test."),
         normalize:bool=typer.Option(False, help="Whether the instances has to be normalized or not"),                                
         non_iidness:Noniidness=typer.Option("uniform", help="Whether the instances have to be distributed in a non-iid way."),
-        tags:str=typer.Option("", help="list of comma separated tags to be added in the wandb lod")):
+        tags:str=typer.Option("", help="list of comma separated tags to be added in the wandb lod"),
+        test_run:bool=typer.Option(True, help="Launch the script without WANDB support and training a single WL"),):
     """
     Testing Samme, Distboost and Preweak adaptation of Samme (Cooper et al. 2017) "
     as well as Adaboost.F1 (Polato, Esposito, et al. 2022) for multi-class classification. "
@@ -383,6 +378,7 @@ def run(dataset: Datasets = typer.Argument(...),
     DATASET: str = dataset.value
     TAGS: List[str] = [DATASET, MODEL, non_iidness.value]
     TAGS += tags.split(",") if "," in tags else []
+    WANDB = not test_run
     options["tags"] = TAGS
 
     console.log("Configuration:", options, style="bold green")
@@ -400,7 +396,7 @@ def run(dataset: Datasets = typer.Argument(...),
     NON_IIDNESS = non_iidness
 
     WEAK_LEARNER = DecisionTreeClassifier(random_state=SEED, max_leaf_nodes=10)
-    N_ESTIMATORS: List[int] = [1] #+ list(range(10, 301, 10))
+    N_ESTIMATORS: List[int] = [1] if test_run else list(range(10, 301, 10))
 
     X_train, X_test, y_train, y_test = load_classification_dataset(name=DATASET,
                                                                    test_size=TEST_SIZE,
