@@ -36,10 +36,12 @@ def experiment_to_skip(ds, seed, model, noniid, verbose):
     
 
 @app.command()
-def main(outfile:str=typer.Argument("Makefile"), verbose:bool=False):
+def main(outfile:str=typer.Argument("Makefile"), verbose:bool=False, test_run:bool=True):
     """
     Generates a Makefile allowing to launch the experiments presented in  (Polato, Esposito, et al. 2022)
     """
+
+    test_run_opt = "--test-run" if test_run else "--no-test-run"
 
     experiments = list(itertools.product(EXPS, SEEDS, MODELS, NONIID))
 
@@ -53,7 +55,7 @@ def main(outfile:str=typer.Argument("Makefile"), verbose:bool=False):
 
             experiment_tags.append(f"logs/ijcnnexps_ds_{ds}_model_{model}_noniid_{noniid}_seed_{seed}.log")
             print(f"{experiment_tags[-1]}:", file=f)
-            print(f"\tpython3 ijcnn_exps.py --seed={seed} --n-clients=10 --model={model} --non-iidness={noniid} --tags=IJCNN {ds}", file=f)
+            print(f"\tpython3 ijcnn_exps.py --seed={seed} --n-clients=10 --model={model} --non-iidness={noniid} --tags=IJCNN {test_run_opt} {ds}", file=f)
 
         exp_tags_str = " ".join(experiment_tags)
         print(f"all:{exp_tags_str}", file=f)

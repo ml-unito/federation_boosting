@@ -13,6 +13,7 @@ from sklearn.datasets import load_svmlight_file
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from typing import Annotated
+import copy
 
 import rich.traceback as traceback
 from rich.console import Console
@@ -27,7 +28,7 @@ from enum import Enum
 
 app = typer.Typer()
 console = Console(record=True)
-traceback.install(show_locals=True)
+traceback.install(show_locals=False)
 
 from fed_adaboost import Boosting, split_dataset
 
@@ -372,7 +373,7 @@ def run(dataset: Datasets = typer.Argument(...),
     as well as Adaboost.F1 (Polato, Esposito, et al. 2022) for multi-class classification. "
     """
 
-    options = locals()
+    options = deepcopy(locals())
     
     MODEL: str = model.value
     DATASET: str = dataset.value
@@ -380,6 +381,7 @@ def run(dataset: Datasets = typer.Argument(...),
     TAGS += tags.split(",") if "," in tags else []
     WANDB = not test_run
     options["tags"] = TAGS
+
 
     console.log("Configuration:", options, style="bold green")
     if WANDB:
