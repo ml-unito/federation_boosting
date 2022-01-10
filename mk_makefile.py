@@ -3,6 +3,9 @@ import rich
 import typer
 
 from rich.console import Console
+from rich.markdown import Markdown
+from rich.padding import Padding
+from rich.panel import Panel
 
 console = Console()
 app = typer.Typer()
@@ -37,16 +40,17 @@ def experiment_to_skip(ds:str, seed:int, model:str, noniid:str, verbose:bool):
 def experiment_list(verbose:bool=False):
     experiments = list(itertools.product(EXPS, SEEDS, MODELS, NONIID))
     result = []
+    skipped = []
 
     for experiment in experiments:
         ds, seed, model, noniid = experiment
 
         if experiment_to_skip(ds, seed, model, noniid, verbose):
-            continue
+            skipped.append(experiment)
+        else:        
+            result.append(experiment)
 
-        result.append(experiment)
-
-    return result
+    return result, skipped
 
 
 @app.command()
@@ -54,9 +58,17 @@ def stats(verbose:bool=False):
     """
     Prints statistics about the experiments to be generated.
     """
-    experiments = experiment_list(verbose)
-    console.log(f"[bold yellow]Stats[/]: # experiments: {len(experiments)}")
+    experiments, skipped = experiment_list(verbose)
 
+    markdown = f"""
+# Stats 
+- experiments: {len(experiments)}
+- skipped: {len(skipped)}
+- **Total**: {len(experiments) + len(skipped)}
+"""
+
+    console.print(Panel.fit(Markdown(markdown), width=40))
+        
 @app.command()
 def run(outfile:str=typer.Argument("Makefile"), verbose:bool=False, test_run:bool=True):
     """
