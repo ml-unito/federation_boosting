@@ -378,7 +378,7 @@ def run(dataset: Datasets = typer.Argument(...),
     MODEL: str = model.value
     DATASET: str = dataset.value
     TAGS: List[str] = [DATASET, MODEL, non_iidness.value]
-    TAGS += tags.split(",") if "," in tags else []
+    TAGS += tags.strip().split(",") if tags else [] 
     WANDB = not test_run
     options["tags"] = TAGS
 
