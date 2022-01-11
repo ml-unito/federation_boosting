@@ -387,7 +387,7 @@ def execute_experiment(dataset, seed, test_size, n_clients, model, normalize, no
     if not test_run:
         wandb.init(project='FederatedAdaboost',
                     entity='mlgroup',
-                    name="{dataset.value}_{model.value}_{non_iidness.value}_{seed}",
+                    name=f"{dataset.value}_{model.value}_{non_iidness.value}_{seed}",
                     tags=TAGS,
                     config=options)
 
