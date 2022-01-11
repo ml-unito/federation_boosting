@@ -12,13 +12,10 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.datasets import load_svmlight_file
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
-from typing import Annotated
-import copy
 
 import rich.traceback as traceback
 from rich.console import Console
 
-from optparse import OptionParser
 import wandb
 import noniid
 import typer
@@ -28,6 +25,7 @@ from enum import Enum
 
 app = typer.Typer()
 console = Console(record=True)
+error_console = Console(stderr=True)
 traceback.install(show_locals=False)
 
 from fed_adaboost import Boosting, split_dataset
@@ -66,8 +64,6 @@ class Noniidness(Enum):
     dirichlet_lbl_skw = "dirichlet_lbl_skw"
     pathological_skw = "pathological_skw"
     covariate_shift = "covariate_shift"
-
-RANDOM_SEEDS = [98765, 12345, 999999, 101010, 765432, 171717, 13579, 24680]
 
 
 def load_classification_dataset(name: str,
@@ -375,88 +371,82 @@ def run(dataset: Datasets = typer.Argument(...),
 
     options = deepcopy(locals())
     
-    MODEL: str = model.value
-    DATASET: str = dataset.value
-    TAGS = tags.strip().split(",") if tags else [] 
-    WANDB = not test_run
-    options["tags"] = TAGS
-    
-    TEST_SIZE: float = test_size
-    NORMALIZE: bool = normalize
-    N_CLIENTS: int = n_clients
-    SEED: int = RANDOM_SEEDS[seed] if seed < 8 else seed
-    NON_IIDNESS = non_iidness
-
-    WEAK_LEARNER = DecisionTreeClassifier(random_state=SEED, max_leaf_nodes=10)
+    WEAK_LEARNER = DecisionTreeClassifier(random_state=seed, max_leaf_nodes=10)
     N_ESTIMATORS: List[int] = [1] if test_run else [1] + list(range(10, 301, 10))
+    TAGS = tags.strip().split(",") if tags else [] 
+    options["tags"] = TAGS
 
     console.log("Configuration:", options, style="bold green")
-    if WANDB:
-        wandb.init(project='FederatedAdaboost',
-                   entity='mlgroup',
-                   name="{DATASET}_{MODEL}_{NON_IIDNESS.value}_{seed}",
-                   tags=TAGS,
-                   config=options)
 
-    X_train, X_test, y_train, y_test = load_classification_dataset(name=DATASET,
-                                                                   test_size=TEST_SIZE,
-                                                                   seed=SEED)
-    if NORMALIZE:
-        scaler = StandardScaler().fit(X_train)   
-        X_train = scaler.transform(X_train)
-        X_test = scaler.transform(X_test)
+    filename = f"ijcnnexps_ds_{dataset.value}_model_{model.value}_noniid_{non_iidness.value}_seed_{seed}"
+    try:
+        if not test_run:
+            wandb.init(project='FederatedAdaboost',
+                       entity='mlgroup',
+                       name="{dataset.value}_{model.value}_{non_iidness.value}_{seed}",
+                       tags=TAGS,
+                       config=options)
 
-    console.log(f"# weak learners: {N_ESTIMATORS}", style="italic")
-    console.log(f"Training set size: {X_train.shape[0]}", style="italic")
-    console.log(f"Test set size: {X_test.shape[0]}", style="italic")
-    console.log(f"# classes: {len(set(y_train))}", style="italic")
-    X_tr, y_tr = distribute_dataset(X_train, y_train, N_CLIENTS, NON_IIDNESS, SEED)
+        X_train, X_test, y_train, y_test = load_classification_dataset(name=dataset.value,
+                                                                       test_size=test_size,
+                                                                       seed=seed)
+        if normalize:
+            scaler = StandardScaler().fit(X_train)   
+            X_train = scaler.transform(X_train)
+            X_test = scaler.transform(X_test)
 
-    if MODEL == "samme": 
-        model = Samme(max(N_ESTIMATORS), WEAK_LEARNER)
-        X_, y_ = X_train, y_train
-    elif MODEL == "distsamme":
-        model = DistSamme(max(N_ESTIMATORS), WEAK_LEARNER)
-        X_, y_ = X_tr, y_tr
-    elif MODEL == "preweaksamme":
-        model = PreweakSamme(max(N_ESTIMATORS), WEAK_LEARNER)
-        X_, y_ = X_tr, y_tr
-    elif MODEL == "adaboost.f1":
-        model = AdaboostF1(max(N_ESTIMATORS), WEAK_LEARNER)
-        X_, y_ = X_tr, y_tr
-    else:
-        raise ValueError("Unknown model %s." %MODEL)
+        console.log(f"# weak learners: {N_ESTIMATORS}", style="italic")
+        console.log(f"Training set size: {X_train.shape[0]}", style="italic")
+        console.log(f"Test set size: {X_test.shape[0]}", style="italic")
+        console.log(f"# classes: {len(set(y_train))}", style="italic")
+        X_tr, y_tr = distribute_dataset(X_train, y_train, n_clients, non_iidness, seed)
 
-    console.log("Training...", style = "bold green")
-    for strong_learner in model.fit(X_, y_, N_ESTIMATORS):
-        y_pred_tr = strong_learner.predict(X_train)
-        y_pred_te = strong_learner.predict(X_test)
-        step = strong_learner.num_weak_learners()
+        if model.value == "samme": 
+            learner = Samme(max(N_ESTIMATORS), WEAK_LEARNER)
+            X_, y_ = X_train, y_train
+        elif model.value == "distsamme":
+            learner = DistSamme(max(N_ESTIMATORS), WEAK_LEARNER)
+            X_, y_ = X_tr, y_tr
+        elif model.value == "preweaksamme":
+            learner = PreweakSamme(max(N_ESTIMATORS), WEAK_LEARNER)
+            X_, y_ = X_tr, y_tr
+        elif model.value == "adaboost.f1":
+            learner = AdaboostF1(max(N_ESTIMATORS), WEAK_LEARNER)
+            X_, y_ = X_tr, y_tr
+        else:
+            raise ValueError("Unknown model %s." %model.value)
 
-        log_dict = {
-            "train" : {
-                "n_estimators" : step,
-                "accuracy": accuracy_score(y_train, y_pred_tr), 
-                "precision": precision_score(y_train, y_pred_tr, average="micro"),
-                "recall": recall_score(y_train, y_pred_tr, average="micro"),
-                "f1": f1_score(y_train, y_pred_tr, average="micro")
-            },
-            "test" : {
-                "n_estimators" : step,
-                "accuracy": accuracy_score(y_test, y_pred_te), 
-                "precision": precision_score(y_test, y_pred_te, average="micro"),
-                "recall": recall_score(y_test, y_pred_te, average="micro"),
-                "f1": f1_score(y_test, y_pred_te, average="micro")
+        console.log("Training...", style = "bold green")
+        for strong_learner in learner.fit(X_, y_, N_ESTIMATORS):
+            y_pred_tr = strong_learner.predict(X_train)
+            y_pred_te = strong_learner.predict(X_test)
+            step = strong_learner.num_weak_learners()
+
+            log_dict = {
+                "train" : {
+                    "n_estimators" : step,
+                    "accuracy": accuracy_score(y_train, y_pred_tr), 
+                    "precision": precision_score(y_train, y_pred_tr, average="micro"),
+                    "recall": recall_score(y_train, y_pred_tr, average="micro"),
+                    "f1": f1_score(y_train, y_pred_tr, average="micro")
+                },
+                "test" : {
+                    "n_estimators" : step,
+                    "accuracy": accuracy_score(y_test, y_pred_te), 
+                    "precision": precision_score(y_test, y_pred_te, average="micro"),
+                    "recall": recall_score(y_test, y_pred_te, average="micro"),
+                    "f1": f1_score(y_test, y_pred_te, average="micro")
+                }
             }
-        }
 
-        if WANDB: wandb.log(log_dict, step=step)
-        else: console.log(log_dict)
+            if not test_run: wandb.log(log_dict, step=step)
+            else: console.log(log_dict)
 
-    outfname = "logs/ijcnnexps_ds_{DATASET}_model_{MODEL}_noniid_{NON_IIDNESS.value}_seed_{seed}"
-
-    console.log("Training complete!")
-    console.save_text(outfname + ".log")
+        console.log("Training complete!")
+        console.save_text("logs/" + filename + ".log")
+    except:
+        console.print_exception(show_locals=True)
+        console.save_text("logs/" + filename + ".err")
 
 if __name__ == "__main__":
     typer.run(run)
