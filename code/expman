@@ -9,6 +9,7 @@ from rich.markdown import Markdown
 from rich.padding import Padding
 from rich.columns import Columns
 from rich.panel import Panel
+from rich.table import Table
 import glob
 
 console = Console()
@@ -89,7 +90,16 @@ def stats(verbose:bool=False):
     panel2 = Panel.fit(Markdown(launched_exps_md), width=40)
 
     console.print(Columns([panel1, panel2]))
-        
+
+    if launched_exps["failed"] > 0:
+        failed_exps = glob.glob("logs/*.err")
+        table = Table(title="[bold red]Failed experiments[/]")
+        table.add_column("#", justify="right", style="bold")
+        table.add_column("Dataset", justify="left", style="magenta")
+        for i, exp in enumerate(failed_exps):
+            table.add_row(str(i), exp)
+
+        console.print(table)
 @app.command()
 def generate_makefiles(outfile:str=typer.Argument("Makefile"), verbose:bool=False, test_run:bool=True):
     """
