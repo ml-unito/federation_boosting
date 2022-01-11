@@ -73,11 +73,12 @@ def get_elapsed(exp):
     curr_time = datetime.now()
 
     delta = curr_time - start_time
-    hours = delta.seconds // 3600
-    minutes = (delta.seconds // 60) % 60
-    seconds = delta.seconds % 60
+    return delta
 
-    return f"{hours}h {minutes}m {seconds}s"
+
+def argsort(seq):
+    # http://stackoverflow.com/questions/3071415/efficient-method-to-calculate-the-rank-vector-of-a-list-in-python
+    return sorted(range(len(seq)), key=seq.__getitem__)
 
 @app.command()
 def stats(verbose:bool=False):
@@ -118,12 +119,21 @@ def stats(verbose:bool=False):
 
     if launched_exps["running"] > 0:
         running_exps = glob.glob("logs/*.run")
+        running_times = list(map(lambda exp: get_elapsed(exp), running_exps))
+        sortindices = argsort(running_times)
+
         table = Table(title="[bold green]Running experiments[/]")
         table.add_column("#", justify="right", style="bold")
         table.add_column("Experiment", justify="left", style="magenta")
         table.add_column("Elapsed time", justify="right", style="yellow")
-        for i, exp in enumerate(running_exps):
-            table.add_row(str(i), exp, get_elapsed(exp))
+
+        for i, index in enumerate(sortindices):
+            delta_time = running_times[index]
+            hours = delta_time.seconds // 3600
+            minutes = (delta_time.seconds % 3600) // 60
+            seconds = delta_time.seconds % 60
+
+            table.add_row(str(i), running_exps[index], f"{hours}h {minutes}m {seconds}s")
 
         console.print(table)
 
