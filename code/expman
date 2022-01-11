@@ -3,6 +3,9 @@
 import itertools
 import rich
 import typer
+import os
+from datetime import date, datetime
+import time
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -65,6 +68,17 @@ def launched_exps_stats():
 
     return { "completed": len(completed), "failed": len(failed), "running": len(running) }
 
+def get_elapsed(exp):
+    start_time = datetime.fromtimestamp(os.path.getmtime(exp))
+    curr_time = datetime.now()
+
+    delta = curr_time - start_time
+    hours = delta.seconds // 3600
+    minutes = (delta.seconds // 60) % 60
+    seconds = delta.seconds % 60
+
+    return f"{hours}h {minutes}m {seconds}s"
+
 @app.command()
 def stats(verbose:bool=False):
     """
@@ -96,18 +110,23 @@ def stats(verbose:bool=False):
         failed_exps = glob.glob("logs/*.err")
         table = Table(title="[bold red]Failed experiments[/]")
         table.add_column("#", justify="right", style="bold")
-        table.add_column("Dataset", justify="left", style="magenta")
+        table.add_column("Experiment", justify="left", style="magenta")
         for i, exp in enumerate(failed_exps):
             table.add_row(str(i), exp)
 
         console.print(table)
 
-    # progress = Progress()
-    # task = progress.add_task("experiments", total=len(experiments))
+    if launched_exps["running"] > 0:
+        running_exps = glob.glob("logs/*.run")
+        table = Table(title="[bold green]Running experiments[/]")
+        table.add_column("#", justify="right", style="bold")
+        table.add_column("Experiment", justify="left", style="magenta")
+        table.add_column("Elapsed time", justify="right", style="yellow")
+        for i, exp in enumerate(running_exps):
+            table.add_row(str(i), exp, get_elapsed(exp))
 
-    # for i in range(len(experiments)):
-    #     # progress.update(task, advance=launched_exps["completed"])
-    #     progress.update(task, advance=1
+        console.print(table)
+
         
     with Progress() as progress:
 
