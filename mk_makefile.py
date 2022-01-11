@@ -77,7 +77,7 @@ def run(outfile:str=typer.Argument("Makefile"), verbose:bool=False, test_run:boo
 
     test_run_opt = "--test-run" if test_run else "--no-test-run"
 
-    experiments = experiment_list()
+    experiments, _ = experiment_list()
 
     with open(outfile, "w") as f:
         experiment_tags = []
@@ -93,6 +93,7 @@ def run(outfile:str=typer.Argument("Makefile"), verbose:bool=False, test_run:boo
 
         print(f"clean_all_logs:", file=f)
         print(f"\trm -f logs/*.log", file=f)
+        print(f"\trm -f logs/*.err", file=f)
 
 
 if __name__ == '__main__':
