@@ -10,6 +10,7 @@ from rich.padding import Padding
 from rich.columns import Columns
 from rich.panel import Panel
 from rich.table import Table
+from rich.progress import Progress
 import glob
 
 console = Console()
@@ -100,6 +101,24 @@ def stats(verbose:bool=False):
             table.add_row(str(i), exp)
 
         console.print(table)
+
+    # progress = Progress()
+    # task = progress.add_task("experiments", total=len(experiments))
+
+    # for i in range(len(experiments)):
+    #     # progress.update(task, advance=launched_exps["completed"])
+    #     progress.update(task, advance=1
+        
+    with Progress() as progress:
+
+        task1=progress.add_task(
+            "[red]Exp progress:", total=len(experiments))
+    
+        progress.update(task1, advance=launched_exps["completed"])
+
+    
+
+    
 @app.command()
 def generate_makefiles(outfile:str=typer.Argument("Makefile"), verbose:bool=False, test_run:bool=True):
     """
