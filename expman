@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import itertools
 import rich
 import typer
@@ -5,7 +7,9 @@ import typer
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.padding import Padding
+from rich.columns import Columns
 from rich.panel import Panel
+import glob
 
 console = Console()
 app = typer.Typer()
@@ -52,6 +56,12 @@ def experiment_list(verbose:bool=False):
 
     return result, skipped
 
+def launched_exps_stats():
+    completed = glob.glob("logs/*.log")
+    failed = glob.glob("logs/*.err")
+    running = glob.glob("logs/*.run")
+
+    return { "completed": len(completed), "failed": len(failed), "running": len(running) }
 
 @app.command()
 def stats(verbose:bool=False):
@@ -59,18 +69,29 @@ def stats(verbose:bool=False):
     Prints statistics about the experiments to be generated.
     """
     experiments, skipped = experiment_list(verbose)
+    launched_exps = launched_exps_stats()
 
-    markdown = f"""
-# Stats 
-- experiments: {len(experiments)}
-- skipped: {len(skipped)}
+    total_exps_md = f"""
+# Total experiments stats 
+- Generated: {len(experiments)}
+- Skipped: {len(skipped)}
 - **Total**: {len(experiments) + len(skipped)}
 """
+    launched_exps_md = f"""
+# Launched experiments stats
+- *Running*: {launched_exps["running"]}    
+- Completed: {launched_exps["completed"]}
+- **Failed**: {launched_exps["failed"]}
+- **Total**: {launched_exps["completed"] + launched_exps["failed"] + launched_exps["running"]}
+"""
 
-    console.print(Panel.fit(Markdown(markdown), width=40))
+    panel1 = Panel.fit(Markdown(total_exps_md), width=40)
+    panel2 = Panel.fit(Markdown(launched_exps_md), width=40)
+
+    console.print(Columns([panel1, panel2]))
         
 @app.command()
-def run(outfile:str=typer.Argument("Makefile"), verbose:bool=False, test_run:bool=True):
+def generate_makefiles(outfile:str=typer.Argument("Makefile"), verbose:bool=False, test_run:bool=True):
     """
     Generates a Makefile allowing to launch the experiments presented in  (Polato, Esposito, et al. 2022)
     """
