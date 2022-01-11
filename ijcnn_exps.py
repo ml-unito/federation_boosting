@@ -377,19 +377,9 @@ def run(dataset: Datasets = typer.Argument(...),
     
     MODEL: str = model.value
     DATASET: str = dataset.value
-    TAGS: List[str] = [DATASET, MODEL, non_iidness.value]
-    TAGS += tags.strip().split(",") if tags else [] 
+    TAGS = tags.strip().split(",") if tags else [] 
     WANDB = not test_run
     options["tags"] = TAGS
-
-
-    console.log("Configuration:", options, style="bold green")
-    if WANDB:
-        wandb.init(project='FederatedAdaboost',
-                   entity='mlgroup',
-                   name="%s_%s" %(MODEL, DATASET),
-                   tags=TAGS,
-                   config=options)
     
     TEST_SIZE: float = test_size
     NORMALIZE: bool = normalize
@@ -398,7 +388,15 @@ def run(dataset: Datasets = typer.Argument(...),
     NON_IIDNESS = non_iidness
 
     WEAK_LEARNER = DecisionTreeClassifier(random_state=SEED, max_leaf_nodes=10)
-    N_ESTIMATORS: List[int] = [1] if test_run else list(range(10, 301, 10))
+    N_ESTIMATORS: List[int] = [1] if test_run else [1] + list(range(10, 301, 10))
+
+    console.log("Configuration:", options, style="bold green")
+    if WANDB:
+        wandb.init(project='FederatedAdaboost',
+                   entity='mlgroup',
+                   name="{DATASET}_{MODEL}_{NON_IIDNESS.value}_{seed}",
+                   tags=TAGS,
+                   config=options)
 
     X_train, X_test, y_train, y_test = load_classification_dataset(name=DATASET,
                                                                    test_size=TEST_SIZE,
@@ -455,9 +453,10 @@ def run(dataset: Datasets = typer.Argument(...),
         if WANDB: wandb.log(log_dict, step=step)
         else: console.log(log_dict)
 
+    outfname = "logs/ijcnnexps_ds_{DATASET}_model_{MODEL}_noniid_{NON_IIDNESS.value}_seed_{seed}"
+
     console.log("Training complete!")
-    console.save_text(
-        f"logs/ijcnnexps_ds_{DATASET}_model_{MODEL}_noniid_{NON_IIDNESS.value}_seed_{seed}.log")
+    console.save_text(outfname + ".log")
 
 if __name__ == "__main__":
     typer.run(run)
