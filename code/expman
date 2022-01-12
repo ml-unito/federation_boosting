@@ -169,7 +169,7 @@ def log_name_to_wandb(logname:str):
     noniid:str = match.group("noniid")
     seed:int = int(match.group("seed"))
 
-    return f"{ds}_{seed}_{model}_{noniid}"
+    return f"{ds}_{model}_{noniid}_{seed}"
 
 
 def print_running_exps_table(launched_exps: dict[str, int]) -> None:
