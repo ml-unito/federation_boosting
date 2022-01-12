@@ -154,7 +154,7 @@ def print_failed_exps_table(launched_exps: dict[str, int]) -> None:
 
 # Use a regex to parse log names in the format "logs/ijcnnexps_ds_<ds>_model_<model>_noniid_<noniid>_seed_<seed>.log"
 # to extract the dataset, model, noniid and seed and return them in the format "<ds>_<model>_<noniid>_<seed>"
-def log_name_to_wandb(logname:str):
+def log_name_to_wandb(logname:str) -> str:
     """
     Returns the name of the experiment in wandb format.
     logname: the name of the experiment in log format.
