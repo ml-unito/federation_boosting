@@ -5,7 +5,7 @@ import rich
 import typer
 import os
 from datetime import datetime, timedelta
-import time
+import regex as re
 
 from typing import Tuple
 
@@ -145,10 +145,31 @@ def print_failed_exps_table(launched_exps: dict[str, int]) -> None:
         table: Table = Table(title="[bold red]Failed experiments[/]")
         table.add_column("#", justify="right", style="bold")
         table.add_column("Experiment", justify="left", style="magenta")
+        table.add_column("WANDB name", justify="right", style="green")
+
         for i, exp in enumerate(failed_exps):
-            table.add_row(str(i), exp)
+            table.add_row(str(i), exp, log_name_to_wandb(exp))
 
         console.print(table)
+
+# Use a regex to parse log names in the format "logs/ijcnnexps_ds_<ds>_model_<model>_noniid_<noniid>_seed_<seed>.log"
+# to extract the dataset, model, noniid and seed and return them in the format "<ds>_<model>_<noniid>_<seed>"
+def log_name_to_wandb(logname:str):
+    """
+    Returns the name of the experiment in wandb format.
+    logname: the name of the experiment in log format.
+    """
+    regexp = re.compile(r"logs/ijcnnexps_ds_(?P<ds>\w+)_model_(?P<model>(\w|\.)+)_noniid_(?P<noniid>\w+)_seed_(?P<seed>\d+).(run|log|err)")
+    match = regexp.match(logname)
+    if match is None:
+        raise ValueError(f"The log name {logname} does not match the expected format")
+    
+    ds:str = match.group("ds")
+    model:str = match.group("model")
+    noniid:str = match.group("noniid")
+    seed:int = int(match.group("seed"))
+
+    return f"{ds}_{seed}_{model}_{noniid}"
 
 
 def print_running_exps_table(launched_exps: dict[str, int]) -> None:
@@ -166,6 +187,7 @@ def print_running_exps_table(launched_exps: dict[str, int]) -> None:
         table: Table = Table(title="[bold green]Running experiments[/]")
         table.add_column("#", justify="right", style="bold")
         table.add_column("Experiment", justify="left", style="magenta")
+        table.add_column("WANDB name", justify="right", style="green")
         table.add_column("Elapsed time", justify="right", style="yellow")
 
         for i, exp_info in enumerate(running_info):
@@ -174,7 +196,7 @@ def print_running_exps_table(launched_exps: dict[str, int]) -> None:
             minutes: int = (delta_time.seconds % 3600) // 60
             seconds: int = delta_time.seconds % 60
 
-            table.add_row(str(i), exp_info[0],
+            table.add_row(str(i), exp_info[0], log_name_to_wandb(exp_info[0]),
                           f"{hours}h {minutes}m {seconds}s")
 
         console.print(table)
