@@ -47,6 +47,12 @@ def experiment_to_skip(ds:str, seed:int, model:str, noniid:str, verbose:bool):
     return False
 
 def experiment_list(verbose:bool=False):
+    """
+    Returns a list of all the experiments that should be launched (i.e., the 
+    list of all experiments minus the ones that should be skipped).
+
+    if verbose is True, then skipped experiments are logged to stdout.
+    """
     experiments = list(itertools.product(EXPS, SEEDS, MODELS, NONIID))
     result = []
     skipped = []
@@ -62,13 +68,20 @@ def experiment_list(verbose:bool=False):
     return result, skipped
 
 def launched_exps_stats():
+    """
+    Returns statistics about the experiments that have been launched. 
+    The statistics are returned as a dictionary with the following keys:
+        "completed": the number of experiments that have been launched and completed
+        "failed": the number of experiments that have been launched and failed
+        "running": the number of experiments that have been launched and are still running
+    """
     completed = glob.glob("logs/*.log")
     failed = glob.glob("logs/*.err")
     running = glob.glob("logs/*.run")
 
     return { "completed": len(completed), "failed": len(failed), "running": len(running) }
 
-def get_elapsed(exp):
+def get_elapsed(exp:str):
     start_time = datetime.fromtimestamp(os.path.getmtime(exp))
     curr_time = datetime.now()
 
@@ -76,7 +89,7 @@ def get_elapsed(exp):
     return delta
 
 
-def argsort(seq):
+def argsort(seq:list[str]):
     # http://stackoverflow.com/questions/3071415/efficient-method-to-calculate-the-rank-vector-of-a-list-in-python
     return sorted(range(len(seq)), key=seq.__getitem__)
 
@@ -84,6 +97,8 @@ def argsort(seq):
 def stats(verbose:bool=False):
     """
     Prints statistics about the experiments to be generated.
+
+    If verbose is True, then the list of skipped experiments is printed to stdout.
     """
     experiments, skipped = experiment_list(verbose)
     launched_exps = launched_exps_stats()
@@ -152,6 +167,10 @@ def stats(verbose:bool=False):
 def generate_makefiles(outfile:str=typer.Argument("Makefile"), verbose:bool=False, test_run:bool=True):
     """
     Generates a Makefile allowing to launch the experiments presented in  (Polato, Esposito, et al. 2022)
+
+    If verbose is True, then the list of skipped experiments is printed to stdout.
+    If test_run is True, then the Makefile is generated for a test run (i.e., the experiments will be
+    configured to *not* connect to wandb and the number of weak learners will be set to 1).
     """
 
     test_run_opt = "--test-run" if test_run else "--no-test-run"
