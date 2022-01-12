@@ -91,6 +91,10 @@ def launched_exps_stats() -> dict[str,int]:
     return { "completed": len(completed), "failed": len(failed), "running": len(running) }
 
 def get_elapsed(exp:str) -> timedelta:
+    """
+    Returns the elapsed time for the experiment exp. 
+    Exp must be a running experiment.
+    """
     start_time:datetime = datetime.fromtimestamp(os.path.getmtime(exp))
     curr_time:datetime = datetime.now()
 
@@ -98,33 +102,27 @@ def get_elapsed(exp:str) -> timedelta:
     return delta
 
 
-def argsort(seq:list[str]) -> list[int]:
-    # http://stackoverflow.com/questions/3071415/efficient-method-to-calculate-the-rank-vector-of-a-list-in-python
-    return sorted(range(len(seq)), key=seq.__getitem__)
-
-@app.command()
-def stats(verbose:bool=False):
+def print_general_stats(experiments: list[ExpDescription], skipped: list[ExpDescription], launched_exps: dict[str, int]) -> None:
     """
-    Prints statistics about the experiments to be generated.
+    Prints general statistics about the experiments that have been launched.
+    Statistics include:
+        - the number of experiments that have been generated
+        - the number of experiments that have been skipped
+        - the total number of experiments (generated + skipped)
 
-    If verbose is True, then the list of skipped experiments is printed to stdout.
+        - the number of experiments that completed
+        - the number of experiments that failed
+        - the number of experiments that are still running
+        - the total number of experiments that have been launched
     """
-    experiments:list[str]
-    skipped:list[str]
     
-    experiments:list[ExpDescription]
-    skipped:list[ExpDescription]
-    experiments, skipped = experiment_list(verbose)
-
-    launched_exps:dict[str,int] = launched_exps_stats()
-
-    total_exps_md:str = f"""
+    total_exps_md: str = f"""
 # Total experiments stats 
 - Generated: {len(experiments)}
 - Skipped: {len(skipped)}
 - **Total**: {len(experiments) + len(skipped)}
 """
-    launched_exps_md:str = f"""
+    launched_exps_md: str = f"""
 # Launched experiments stats
 - *Running*: {launched_exps["running"]}    
 - Completed: {launched_exps["completed"]}
@@ -132,14 +130,19 @@ def stats(verbose:bool=False):
 - **Total**: {launched_exps["completed"] + launched_exps["failed"] + launched_exps["running"]}
 """
 
-    panel1:Panel = Panel.fit(Markdown(total_exps_md), width=40)
-    panel2:Panel = Panel.fit(Markdown(launched_exps_md), width=40)
+    panel1: Panel = Panel.fit(Markdown(total_exps_md), width=40)
+    panel2: Panel = Panel.fit(Markdown(launched_exps_md), width=40)
 
     console.print(Columns([panel1, panel2]))
 
+
+def print_failed_exps_table(launched_exps: dict[str, int]) -> None:
+    """
+    Prints a table with the experiments that failed.
+    """
     if launched_exps["failed"] > 0:
-        failed_exps:list[str] = glob.glob("logs/*.err")
-        table:Table = Table(title="[bold red]Failed experiments[/]")
+        failed_exps: list[str] = glob.glob("logs/*.err")
+        table: Table = Table(title="[bold red]Failed experiments[/]")
         table.add_column("#", justify="right", style="bold")
         table.add_column("Experiment", justify="left", style="magenta")
         for i, exp in enumerate(failed_exps):
@@ -147,39 +150,71 @@ def stats(verbose:bool=False):
 
         console.print(table)
 
-    if launched_exps["running"] > 0:
-        running_exps:list[str] = glob.glob("logs/*.run")
-        running_times:list[timedelta] = list(map(lambda exp: get_elapsed(exp), running_exps))
-        sortindices:list[int] = argsort(running_times)
 
-        table:Table = Table(title="[bold green]Running experiments[/]")
+def print_running_exps_table(launched_exps: dict[str, int]) -> None:
+    """
+    Prints a table with the experiments that are still running and their current running time.
+    """
+    if launched_exps["running"] > 0:
+        running_exps: list[str] = glob.glob("logs/*.run")
+        running_times: list[timedelta] = list(
+            map(lambda exp: get_elapsed(exp), running_exps))
+
+        running_info = list(zip(running_exps, running_times))
+        running_info = sorted(running_info, key=lambda x: x[1])
+
+        table: Table = Table(title="[bold green]Running experiments[/]")
         table.add_column("#", justify="right", style="bold")
         table.add_column("Experiment", justify="left", style="magenta")
         table.add_column("Elapsed time", justify="right", style="yellow")
 
-        for i, index in enumerate(sortindices):
-            delta_time:timedelta = running_times[index]
-            hours:int = delta_time.seconds // 3600
-            minutes:int = (delta_time.seconds % 3600) // 60
-            seconds:int = delta_time.seconds % 60
+        for i, exp_info in enumerate(running_info):
+            delta_time: timedelta = exp_info[1]
+            hours: int = delta_time.seconds // 3600
+            minutes: int = (delta_time.seconds % 3600) // 60
+            seconds: int = delta_time.seconds % 60
 
-            table.add_row(str(i), running_exps[index], f"{hours}h {minutes}m {seconds}s")
+            table.add_row(str(i), exp_info[0],
+                          f"{hours}h {minutes}m {seconds}s")
 
         console.print(table)
 
-        
+
+def print_progress_bar(experiments: list[ExpDescription], launched_exps: dict[str, int]) -> None:
+    """
+    Prints a progress bar based on the number of experiments that have completed (w.r.t., the total number of
+    experiments generated and not skipped).
+    """
     with Progress() as progress:
 
-        task1:TaskID = progress.add_task(
+        task1: TaskID = progress.add_task(
             "[red]Exp progress:", total=len(experiments))
-    
+
         progress.update(task1, advance=launched_exps["completed"])
 
+
+@app.command()
+def stats(verbose:bool=False) -> None:
+    """
+    Prints statistics about the experiments to be generated.
+
+    If verbose is True, then the list of skipped experiments is printed to stdout.
+    """    
+    experiments:list[ExpDescription]
+    skipped:list[ExpDescription]
+
+    experiments, skipped = experiment_list(verbose)
+    launched_exps:dict[str,int] = launched_exps_stats()
+
+    print_general_stats(experiments, skipped, launched_exps)
+    print_failed_exps_table(launched_exps)
+    print_running_exps_table(launched_exps)
+    print_progress_bar(experiments, launched_exps)
     
 
     
 @app.command()
-def generate_makefiles(outfile:str=typer.Argument("Makefile"), verbose:bool=False, test_run:bool=True):
+def generate_makefiles(outfile:str=typer.Argument("Makefile"), verbose:bool=False, test_run:bool=True) -> None:
     """
     Generates a Makefile allowing to launch the experiments presented in  (Polato, Esposito, et al. 2022)
 
