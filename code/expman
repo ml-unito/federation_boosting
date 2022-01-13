@@ -15,6 +15,7 @@ from rich.padding import Padding
 from rich.columns import Columns
 from rich.panel import Panel
 from rich.table import Table
+from rich.progress import track
 from rich.progress import Progress, TaskID
 import glob
 
@@ -23,10 +24,13 @@ from wandb.apis.public import File
 from exputils import *
 
 
-def generate_exp_targets(experiments: list[ExpDescription], test_run_opt: str, f: File) -> None:
+def generate_exp_targets(test_run_opt: str, f: File, verbose=False) -> None:
+    experiments: list[ExpDescription]
+    experiments, _ = experiment_list(verbose)
+
     experiment_tags: list[str] = []
     
-    for experiment in experiments:
+    for experiment in track(experiments, "Generating experiment targets"):
         ds: str
         seed: int
         model: str
@@ -46,11 +50,11 @@ def generate_exp_targets(experiments: list[ExpDescription], test_run_opt: str, f
     print(f"\trm -f logs/*.log", file=f)
     print(f"\trm -f logs/*.err", file=f)
 
-def generate_plot_targets(f) -> None:
-    pl = plotlist()
+def generate_plot_targets(f:File, verbose=False) -> None:
+    pl = plotlist(verbose)
     filenames = []
 
-    for ds, noniidness in pl:
+    for ds, noniidness in track(pl, "Generating plot targets"):
         fname = plot_fname(ds, noniidness)
         print(f"{fname}:", file=f)
         print(f"\tpython3 mkgraphs.py plot {ds} {noniidness}", file=f)
@@ -59,7 +63,9 @@ def generate_plot_targets(f) -> None:
 
     filename_str = " ".join(filenames)
     print(f"all_plots:{filename_str}", file=f)
-
+    print(f"clean_all_plots:", file=f)
+    print(f"\trm -f images/*.pdf", file=f)
+    
 
 def launched_exps_stats() -> dict[str,int]:
     """
@@ -221,7 +227,10 @@ def stats(verbose:bool=False) -> None:
 
 
 @app.command()
-def generate_makefiles(outfile:str=typer.Argument("Makefile"), verbose:bool=False, test_run:bool=True) -> None:
+def generate_makefiles(outfile:str=typer.Argument("Makefile"),
+                        exps:bool=typer.Option(True, help="Generate entries for the experiments"),
+                        plots:bool=typer.Option(True, help="Generate entries for the plots"),
+                        verbose:bool=False, test_run:bool=True) -> None:
     """
     Generates a Makefile allowing to launch the experiments presented in  (Polato, Esposito, et al. 2022)
 
@@ -232,12 +241,12 @@ def generate_makefiles(outfile:str=typer.Argument("Makefile"), verbose:bool=Fals
 
     test_run_opt:str = "--test-run" if test_run else "--no-test-run"
 
-    experiments:list[ExpDescription]
-    experiments, _ = experiment_list(verbose)
-
     with open(outfile, "w") as f:
-        generate_exp_targets(experiments, test_run_opt, f)
-        generate_plot_targets(f)
+        if exps:
+            generate_exp_targets(test_run_opt, f, verbose=verbose)
+        
+        if plots:
+            generate_plot_targets(f, verbose=verbose)
 
 
 if __name__ == '__main__':

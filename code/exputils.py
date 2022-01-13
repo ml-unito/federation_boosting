@@ -25,11 +25,10 @@ def plot_iidness_name(iidness: str) -> str:
 def plot_fname(dataset: str, noniidness: str) -> str:
     return f"images/f1_{dataset}_{noniidness}.pdf"
 
-def plotlist() -> list[str, str]:
+def plotlist(verbose=False) -> list[str, str]:
     def plot_to_skip(exp):
-        console.log(exp)
         ds, iidness = exp
-        return experiment_to_skip(ds, None, None, iidness, True)
+        return experiment_to_skip(ds, None, None, iidness, verbose)
 
 
     def to_plot_names(exp):
@@ -38,7 +37,7 @@ def plotlist() -> list[str, str]:
 
     filtered_list = list(filter(lambda exp: not plot_to_skip(exp),product(EXPS, NONIID)))
 
-    return map(lambda exp: to_plot_names(exp), filtered_list)
+    return list(map(lambda exp: to_plot_names(exp), filtered_list))
 
 
 def experiment_to_skip(ds: str, seed: int, model: str, noniid: str, verbose: bool):

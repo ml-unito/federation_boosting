@@ -62,8 +62,8 @@ def plot(dataset:str, non_iidness:str):
         console.print(f"Data error for {dataset} {non_iidness}")
 
 @app.command()
-def plot_all():
-    pl = plotlist()
+def plot_all(verbose:bool=False):
+    pl = plotlist(verbose=verbose)
     
     for plotelems in progress.track(pl, description="Plotting..."):
         plot(*plotelems)
