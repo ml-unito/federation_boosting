@@ -246,7 +246,7 @@ def generate_makefiles(outfile:str=typer.Argument("Makefile"), verbose:bool=Fals
     test_run_opt:str = "--test-run" if test_run else "--no-test-run"
 
     experiments:list[ExpDescription]
-    experiments, _ = experiment_list()
+    experiments, _ = experiment_list(verbose)
 
     with open(outfile, "w") as f:
         experiment_tags:list[str] = []
