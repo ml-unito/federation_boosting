@@ -24,7 +24,7 @@ console = Console()
 app = typer.Typer()
 
 EXPS = "adult,letter,forestcover,splice,vehicle,vowel,segmentation,kr-vs-kp,sat,pendigits".split(",")
-SEEDS = [0, 1, 2, 3]
+SEEDS = [0, 1, 2, 3, 4]
 MODELS = "samme,distsamme,preweaksamme,adaboost.f1".split(",")
 NONIID = "uniform,num_examples_skw,lbl_skw,dirichlet_lbl_skw,pathological_skw,covariate_shift".split(",")
 
@@ -33,9 +33,7 @@ def experiment_to_skip(ds:str, seed:int, model:str, noniid:str, verbose:bool):
     Returns True if the experiment should be skipped.
     Presently: datasets "adult" e "kr-vs-kp" should be skipped when iidness is in 
         "lbl_skw", "dirichlet_lbl_skw", "pathological_skw" (these are binary datasets which cannot
-        work with these types of non-iidness)
-    In addition: if noniid is "pathological_skw", then we are avoiding the experiments since there is
-        a problem in how the data are split in some cases.
+        work with these types of non-iidness)        
     """
     if ds in ["adult", "kr-vs-kp"] and noniid in ["lbl_skw", "dirichlet_lbl_skw", "pathological_skw"]:
         if verbose:
@@ -43,10 +41,10 @@ def experiment_to_skip(ds:str, seed:int, model:str, noniid:str, verbose:bool):
 
         return True
 
-    if noniid == "pathological_skw":
-        if verbose:
-            console.log(f"[bold yellow]Skipping[/] {ds} {seed} {model} {noniid}")
-        return True
+    # if noniid == "pathological_skw":
+    #     if verbose:
+    #         console.log(f"[bold yellow]Skipping[/] {ds} {seed} {model} {noniid}")
+    #     return True
 
     return False
 
