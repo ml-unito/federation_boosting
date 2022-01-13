@@ -128,7 +128,7 @@ def distribute_dataset(X, y, n, non_iidness, seed):
     elif non_iidness == Noniidness.dirichlet_lbl_skw:
         ass = noniid.dist_skew_lbl(X, y, n, beta=.5)
     elif non_iidness == Noniidness.pathological_skw:
-        ass = noniid.pathological_dist_skew_lbl(X, y, n, shards_per_client=2)
+        ass = noniid.pathological_dist_skew_lbl(X, y, n, shards_per_client=3)
     elif non_iidness == Noniidness.covariate_shift:
         ass = noniid.covariate_shift(X, y, n, modes=2)
     else:

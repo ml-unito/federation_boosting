@@ -187,7 +187,11 @@ def dist_skew_lbl(X: np.ndarray,
     assignment = np.zeros(y.shape[0])
     for c in labels:
         ids = np.where(y == c)[0]
-        assignment[ids] = choice(n, size=len(ids), p=pk[c])
+        shuffle(ids)
+        shuffle(pk[c])
+        assignment[ids[n:]] = choice(n, size=len(ids)-n, p=pk[c])
+        assignment[ids[:n]] = list(range(n))
+
     return [np.where(assignment == i)[0] for i in range(n)]
 
 
