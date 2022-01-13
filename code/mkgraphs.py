@@ -12,6 +12,7 @@ from rich.console import Console
 from rich.table import Table
 import rich.traceback as traceback
 from rich import progress
+from exputils import plotlist, plot_fname
 
 console = Console()
 traceback.install()
@@ -28,6 +29,8 @@ def avg_stats(runs:list, stat:str) -> pd.DataFrame:
         stats.append(run_stats.to_numpy())
 
     return np.mean(stats, axis=0), np.std(stats, axis=0)
+
+
 
 @app.command()
 def plot(dataset:str, non_iidness:str):
@@ -53,23 +56,16 @@ def plot(dataset:str, non_iidness:str):
     try:
         fig,ax = plt.subplots(1,1)
         sns.lineplot(data=data, x="_step", hue="model", y="test.f1", ax=ax)
-        plt.savefig(f"f1_{dataset}_{non_iidness}.pdf")
+        plt.savefig(plot_fname(dataset, non_iidness))
         plt.close(fig)
     except(ValueError):
         console.print(f"Data error for {dataset} {non_iidness}")
 
-    
-
 @app.command()
 def plot_all():
-    DATASETS = ["adult", "letter", "forestcover", "splice", "vehicle", "vowel", "segmentation", "kr-vs-kp", "sat", "pendigits"]
-    DATASETS = map(lambda x: f"Datasets.{x}", DATASETS)
-    NON_IIDNESS = ["uniform", "num_examples_skw", "lbl_skw", "dirichlet_lbl_skw",  "covariate_shift"]
-    NON_IIDNESS = map(lambda x: f"Noniidness.{x}", NON_IIDNESS)
-
-    plotlist = list(product(DATASETS, NON_IIDNESS))
+    pl = plotlist()
     
-    for plotelems in progress.track(plotlist, description="Plotting..."):
+    for plotelems in progress.track(pl, description="Plotting..."):
         plot(*plotelems)
 
 

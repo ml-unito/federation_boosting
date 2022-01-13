@@ -24,7 +24,6 @@ import wandb
 import typer
 from enum import Enum
 
-
 # Handlers
 
 app = typer.Typer()
