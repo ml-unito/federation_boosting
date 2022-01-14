@@ -17,14 +17,116 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.progress import track
 from rich.progress import Progress, TaskID
+
 import glob
+from itertools import groupby
+import wandb
 
 from wandb.apis.public import File
 
 from exputils import *
 
 
+@app.command("results")
+def results_stats():
+    """
+    Plot the results of the runs
+    """
+    api:wandb.Api = wandb.Api()
+    entity:str
+    project:str 
+
+    entity, project = "mlgroup", "FederatedAdaboost "
+    runs = list(api.runs(entity + "/" + project, filters={"tags": "IJCNN"}))
+
+    console = Console(record=True)
+    runs = sorted(runs, key=lambda x: x.config["non_iidness"] + x.config["dataset"] + x.config["model"])
+
+    exps_by_skw = groupby(
+        runs, lambda r: r.config["non_iidness"] + "|" + r.config["dataset"])
+
+    ranks = {"FedAlgorithms.adaboost": [], "FedAlgorithms.distsamme": [], "FedAlgorithms.samme": [], "FedAlgorithms.preweaksamme": []}
+    ranks_by_skw = {
+        "Noniidness.uniform": {"FedAlgorithms.adaboost": [], "FedAlgorithms.distsamme": [], "FedAlgorithms.samme": [], "FedAlgorithms.preweaksamme": []},
+        "Noniidness.num_examples_skw": {"FedAlgorithms.adaboost": [], "FedAlgorithms.distsamme": [], "FedAlgorithms.samme": [], "FedAlgorithms.preweaksamme": []},
+        "Noniidness.lbl_skw": {"FedAlgorithms.adaboost": [], "FedAlgorithms.distsamme": [], "FedAlgorithms.samme": [], "FedAlgorithms.preweaksamme": []},
+        "Noniidness.dirichlet_lbl_skw": {"FedAlgorithms.adaboost": [], "FedAlgorithms.distsamme": [], "FedAlgorithms.samme": [], "FedAlgorithms.preweaksamme": []},
+        "Noniidness.pathological_skw": {"FedAlgorithms.adaboost": [], "FedAlgorithms.distsamme": [], "FedAlgorithms.samme": [], "FedAlgorithms.preweaksamme": []},
+        "Noniidness.covariate_shift": {"FedAlgorithms.adaboost": [], "FedAlgorithms.distsamme": [], "FedAlgorithms.samme": [], "FedAlgorithms.preweaksamme": []}
+    }
+
+    for non_iidness_dataset, exps in exps_by_skw:
+        non_iidness, dataset = non_iidness_dataset.split("|")
+
+        table = Table(title=f"skw:{non_iidness} dataset:{dataset}")
+        table.add_column("rank", justify="right", style="bold white")
+        table.add_column("method", justify="right", style="magenta")
+        table.add_column("f1", justify="right", style="green")
+
+        exps = list(exps)
+        model_groups = groupby(exps, lambda r: r.config["model"])
+        model_avg = []
+
+        try:
+            for model, runs in model_groups:
+                runs = list(runs)
+                f1s = [r.summary["test"]["f1"] for r in runs]
+                f1_avg = sum(f1s) / len(f1s)
+                model_avg.append((model, f1_avg))
+        except KeyError as e:
+            console.print(f"Error in retrieving key {e} for dataset:{dataset} skw:{non_iidness} model:{model}", style="bold yellow")
+            continue
+
+
+        for index, exp_f1 in enumerate(sorted(model_avg, key=lambda x:x[1], reverse=True)):
+            model, f1 = exp_f1
+            try:
+                ranks[model].append(index+1)
+                ranks_by_skw[non_iidness][model].append(index+1)
+
+                if model == "FedAlgorithms.adaboost":
+                    model = f"[bold]{model}[/]"
+
+                table.add_row(str(index), model, str(f1))
+            except KeyError as exception:
+                console.print(f"Error with experiment -- {exception}")
+
+        console.print(table)
+
+    ranks_table = Table(title="Ranks")
+    ranks_table.add_column("method", justify="left", style="magenta")
+    ranks_table.add_column("avg rank", justify="right", style="green")
+
+    for key in ranks.keys():
+        rank_list = ranks[key]
+        ranks_table.add_row(key, str(sum(rank_list) / len(rank_list)))
+
+    console.print(ranks_table)
+
+
+    for key in ranks_by_skw.keys():
+        rbs_table = Table(title=f"Ranks for skw {key}")
+        rbs_table.add_column("method", justify="left", style="magenta")
+        rbs_table.add_column("avg rank", justify="left", style="green")
+        skw_ranks = ranks_by_skw[key]
+
+        for model in skw_ranks.keys():
+            rank_list = skw_ranks[model]
+            rbs_table.add_row(model, str(sum(rank_list) / len(rank_list)))
+
+        console.print(rbs_table)
+
+
+    console.save_html("results.html")
+
+
+
+
+
 def generate_exp_targets(test_run_opt: str, f: File, verbose=False) -> None:
+    """
+    Generates the Makefile targets for the experiments that needs to be done.
+    """
     experiments: list[ExpDescription]
     experiments, _ = experiment_list(verbose)
 
@@ -51,6 +153,9 @@ def generate_exp_targets(test_run_opt: str, f: File, verbose=False) -> None:
     print(f"\trm -f logs/*.err", file=f)
 
 def generate_plot_targets(f:File, verbose=False) -> None:
+    """
+    Generates the Makefile targets for the plots that needs to be done.
+    """
     pl = plotlist(verbose)
     filenames = []
 
