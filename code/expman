@@ -21,10 +21,37 @@ from rich.progress import Progress, TaskID
 import glob
 from itertools import groupby
 import wandb
+from copy import deepcopy
 
 from wandb.apis.public import File
 
 from exputils import *
+
+
+def print_rank_tables(ranks, ranks_by_skw):
+    ranks_table = Table(title="Ranks")
+    ranks_table.add_column("method", justify="left", style="magenta")
+    ranks_table.add_column("avg rank", justify="right", style="green")
+
+    for key in ranks.keys():
+        rank_list = ranks[key]
+        ranks_table.add_row(key, str(sum(rank_list) / len(rank_list)))
+
+    console.print(ranks_table)
+
+    for key in ranks_by_skw.keys():
+        rbs_table = Table(title=f"Ranks for skw {key}")
+        rbs_table.add_column("method", justify="left", style="magenta")
+        rbs_table.add_column("avg rank", justify="left", style="green")
+        skw_ranks = ranks_by_skw[key]
+
+        for model in skw_ranks.keys():
+            rank_list = skw_ranks[model]
+            rbs_table.add_row(model, str(sum(rank_list) / len(rank_list)))
+
+        console.print(rbs_table)
+
+
 
 
 @app.command("results")
@@ -39,20 +66,22 @@ def results_stats():
     entity, project = "mlgroup", "FederatedAdaboost "
     runs = list(api.runs(entity + "/" + project, filters={"tags": "IJCNN"}))
 
-    console = Console(record=True)
     runs = sorted(runs, key=lambda x: x.config["non_iidness"] + x.config["dataset"] + x.config["model"])
+
+    console = Console(record=True)
+
 
     exps_by_skw = groupby(
         runs, lambda r: r.config["non_iidness"] + "|" + r.config["dataset"])
 
-    ranks = {"FedAlgorithms.adaboost": [], "FedAlgorithms.distsamme": [], "FedAlgorithms.samme": [], "FedAlgorithms.preweaksamme": []}
+    ranks = { "FedAlgorithms.adaboost": [], "FedAlgorithms.distsamme": [], "FedAlgorithms.samme": [], "FedAlgorithms.preweaksamme": [] }
     ranks_by_skw = {
-        "Noniidness.uniform": {"FedAlgorithms.adaboost": [], "FedAlgorithms.distsamme": [], "FedAlgorithms.samme": [], "FedAlgorithms.preweaksamme": []},
-        "Noniidness.num_examples_skw": {"FedAlgorithms.adaboost": [], "FedAlgorithms.distsamme": [], "FedAlgorithms.samme": [], "FedAlgorithms.preweaksamme": []},
-        "Noniidness.lbl_skw": {"FedAlgorithms.adaboost": [], "FedAlgorithms.distsamme": [], "FedAlgorithms.samme": [], "FedAlgorithms.preweaksamme": []},
-        "Noniidness.dirichlet_lbl_skw": {"FedAlgorithms.adaboost": [], "FedAlgorithms.distsamme": [], "FedAlgorithms.samme": [], "FedAlgorithms.preweaksamme": []},
-        "Noniidness.pathological_skw": {"FedAlgorithms.adaboost": [], "FedAlgorithms.distsamme": [], "FedAlgorithms.samme": [], "FedAlgorithms.preweaksamme": []},
-        "Noniidness.covariate_shift": {"FedAlgorithms.adaboost": [], "FedAlgorithms.distsamme": [], "FedAlgorithms.samme": [], "FedAlgorithms.preweaksamme": []}
+        "Noniidness.uniform": deepcopy(ranks),
+        "Noniidness.num_examples_skw": deepcopy(ranks),
+        "Noniidness.lbl_skw": deepcopy(ranks),
+        "Noniidness.dirichlet_lbl_skw": deepcopy(ranks),
+        "Noniidness.pathological_skw": deepcopy(ranks),
+        "Noniidness.covariate_shift": deepcopy(ranks)
     }
 
     for non_iidness_dataset, exps in exps_by_skw:
@@ -93,30 +122,7 @@ def results_stats():
 
         console.print(table)
 
-    ranks_table = Table(title="Ranks")
-    ranks_table.add_column("method", justify="left", style="magenta")
-    ranks_table.add_column("avg rank", justify="right", style="green")
-
-    for key in ranks.keys():
-        rank_list = ranks[key]
-        ranks_table.add_row(key, str(sum(rank_list) / len(rank_list)))
-
-    console.print(ranks_table)
-
-
-    for key in ranks_by_skw.keys():
-        rbs_table = Table(title=f"Ranks for skw {key}")
-        rbs_table.add_column("method", justify="left", style="magenta")
-        rbs_table.add_column("avg rank", justify="left", style="green")
-        skw_ranks = ranks_by_skw[key]
-
-        for model in skw_ranks.keys():
-            rank_list = skw_ranks[model]
-            rbs_table.add_row(model, str(sum(rank_list) / len(rank_list)))
-
-        console.print(rbs_table)
-
-
+    print_rank_tables(ranks, ranks_by_skw)
     console.save_html("results.html")
 
 
