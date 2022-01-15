@@ -29,6 +29,9 @@ from wandb.apis.public import File
 from exputils import *
 
 class RanksCounter:
+    """
+    Stores ranks for each algorithm in a dictionary and provides methods to print them
+    """
     def __init__(self, console):
         self.ranks = {"FedAlgorithms.adaboost": [], "FedAlgorithms.distsamme": [], "FedAlgorithms.samme": [], "FedAlgorithms.preweaksamme": []}
         self.ranks_by_skw = {
@@ -42,6 +45,9 @@ class RanksCounter:
         self.console = console
 
     def add_rank(self, group):
+        """
+        Updates dictionaries with ranks induced by the given group
+        """
         data: pd.DataFrame = group.sort_values(by=['F1'], inplace=False, ascending=False)
         skw = data.head(1).Skw.item()
 
@@ -50,6 +56,9 @@ class RanksCounter:
             self.ranks_by_skw[skw][row.Model].append(rank + 1)
 
     def print_global_rank(self):
+        """
+        Prints global ranks (a.k.a. by-algorithms ranks)
+        """
         table = Table(title="Ranks by Algorithms")
         table.add_column("Algorithm", justify="left")
         table.add_column("Rank", justify="right")
@@ -60,6 +69,9 @@ class RanksCounter:
         self.console.print(table)
 
     def print_skw_ranks(self):
+        """
+        Prints ranks by skw (a.k.a. by-skewness ranks)
+        """
         for skw in self.ranks_by_skw.keys():
             table = Table(title=skw)
             table.add_column("Algorithm", justify="left")
@@ -71,6 +83,9 @@ class RanksCounter:
             self.console.print(table)
 
     def print_rank_table(self, group):
+        """
+        Prints ranks tables for the given group (used by --by-all option)
+        """
         data: pd.DataFrame = group.sort_values(
             by=['F1'], inplace=False, ascending=False)
 
@@ -85,30 +100,10 @@ class RanksCounter:
         self.console.print(table)
 
 
-def print_rank_tables(ranks, ranks_by_skw):
-    ranks_table = Table(title="Ranks")
-    ranks_table.add_column("method", justify="left", style="magenta")
-    ranks_table.add_column("avg rank", justify="right", style="green")
-
-    for key in ranks.keys():
-        rank_list = ranks[key]
-        ranks_table.add_row(key, str(sum(rank_list) / len(rank_list)))
-
-    console.print(ranks_table)
-
-    for key in ranks_by_skw.keys():
-        rbs_table = Table(title=f"Ranks for skw {key}")
-        rbs_table.add_column("method", justify="left", style="magenta")
-        rbs_table.add_column("avg rank", justify="left", style="green")
-        skw_ranks = ranks_by_skw[key]
-
-        for model in skw_ranks.keys():
-            rank_list = skw_ranks[model]
-            rbs_table.add_row(model, str(sum(rank_list) / len(rank_list)))
-
-        console.print(rbs_table)
-
 def exp_iter(runs):
+    """
+    Iterates over runs yielding ds, skw, model, f1_avg for each run
+    """
     exps_by_skw = groupby(
         runs, lambda r: r.config["non_iidness"] + "|" + r.config["dataset"])
 
@@ -130,6 +125,9 @@ def exp_iter(runs):
 
 
 def wandb_runs_to_dataframe():
+    """
+    Connects to wandb and returns a pandas dataframe with all runs
+    """
     api: wandb.Api = wandb.Api()
     entity:str
     project:str 
@@ -153,7 +151,7 @@ def results_ranks(by_all: bool = typer.Option(False, help="Print a rank table fo
     """
     Print tables about rankings of the algorithms.
     """
-    console = Console(record=True)
+    console:Console = Console(record=True)
 
     if all:
         by_all = True
