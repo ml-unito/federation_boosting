@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import itertools
+from unittest import skip
 import rich
 import typer
 import os
@@ -43,6 +44,16 @@ class RanksCounter:
             "Noniidness.covariate_shift": deepcopy(self.ranks)
         }
         self.console = console
+        self.rank_tables = []
+
+    def hm(self, model):
+        """
+        Returns a short model name
+        """
+        if model == "FedAlgorithms.adaboost":
+            return "[bold]FedAlgorithms.adaboost.F1[/]"
+        else:
+            return model
 
     def add_rank(self, group):
         """
@@ -54,17 +65,26 @@ class RanksCounter:
         for rank, row in enumerate(data.itertuples()):
             self.ranks[row.Model].append(rank + 1)
             self.ranks_by_skw[skw][row.Model].append(rank + 1)
+        
+    def avg_rank(self, ranks):
+        """
+        Returns average rank of the given ranks
+        """
+        return sum(ranks) / len(ranks)
 
     def print_global_rank(self):
         """
         Prints global ranks (a.k.a. by-algorithms ranks)
         """
-        table = Table(title="Ranks by Algorithms")
-        table.add_column("Algorithm", justify="left")
-        table.add_column("Rank", justify="right")
+        table = Table(title="[bold red]Ranks by Algorithms[/]")
+        table.add_column("Algorithm", justify="left", style="red")
+        table.add_column("Rank", justify="right", style="bold")
 
-        for key in self.ranks.keys():
-            table.add_row(key, str(sum(self.ranks[key]) / len(self.ranks[key])))
+        global_ranks = [[method, self.avg_rank(self.ranks[method])] for method in self.ranks.keys()]
+        global_ranks.sort(key=lambda x: x[1])
+
+        for model, rank in global_ranks:
+            table.add_row(self.hm(model), f"{rank:.2f}")
 
         self.console.print(table)
 
@@ -72,35 +92,46 @@ class RanksCounter:
         """
         Prints ranks by skw (a.k.a. by-skewness ranks)
         """
+
+        tables = []
         for skw in self.ranks_by_skw.keys():
-            table = Table(title=skw)
-            table.add_column("Algorithm", justify="left")
-            table.add_column("Rank", justify="right")
+            table = Table(title=f"[bold cyan]{skw}[/]")
+            table.add_column("Algorithm", justify="left", style="cyan")
+            table.add_column("Rank", justify="right", style="bold")
 
-            for method in self.ranks_by_skw[skw].keys():
-                table.add_row(method, str(sum(self.ranks_by_skw[skw][method]) / len(self.ranks_by_skw[skw][method])))
+            skw_ranks = [[method, self.avg_rank(self.ranks_by_skw[skw][method])] for method in self.ranks_by_skw[skw].keys()]
+            skw_ranks.sort(key=lambda x: x[1])
 
-            self.console.print(table)
+            for method, rank in skw_ranks:
+                table.add_row(self.hm(method), f"{rank:.2f}")
 
-    def print_rank_table(self, group):
+            tables.append(table)
+
+        self.console.print(Panel(Columns(tables), title="[bold cyan]By Skewness[/]", border_style="cyan"))
+
+    def add_rank_table(self, group):
         """
         Prints ranks tables for the given group (used by --by-all option)
         """
         data: pd.DataFrame = group.sort_values(
             by=['F1'], inplace=False, ascending=False)
 
-        table = Table(title=data.head(1)["Dataset"].item() + " " + data.head(1)["Skw"].item())
-        table.add_column("#", justify="left", style="bold white")
+        ds_skw = data.head(1)["Dataset"].item() + " " + data.head(1)["Skw"].item()
+        table = Table(title=f"[bold magenta]{ds_skw}[/]")
+        table.add_column("#", justify="left", style="bold")
         table.add_column("Model", justify="left", style="magenta")
         table.add_column("F1", justify="right", style="green")
 
         for i, row in enumerate(data.itertuples()):
-            table.add_row(str(i+1), row.Model, str(row.F1))
+            table.add_row(str(i+1), self.hm(row.Model), f"{row.F1:.2f}")
 
-        self.console.print(table)
+        self.rank_tables.append(table)
+
+    def print_rank_tables(self):
+        self.console.print(Panel(Columns(self.rank_tables), title="[bold magenta]By Skewness[/]", border_style="magenta"))
 
 
-def exp_iter(runs):
+def exp_iter(runs,console):
     """
     Iterates over runs yielding ds, skw, model, f1_avg for each run
     """
@@ -124,7 +155,7 @@ def exp_iter(runs):
                 f"Error retrieving key:{e}  in exp: {ds}, {skw}, {model}")
 
 
-def wandb_runs_to_dataframe():
+def wandb_runs_to_dataframe(console):
     """
     Connects to wandb and returns a pandas dataframe with all runs
     """
@@ -137,7 +168,7 @@ def wandb_runs_to_dataframe():
 
     runs = sorted(runs, key=lambda x: x.config["non_iidness"] + x.config["dataset"] + x.config["model"])
     data = pd.DataFrame(columns=["Dataset", "Skw", "Model", "F1"])
-    for ds, skw, model, f1_avg in exp_iter(runs):
+    for ds, skw, model, f1_avg in exp_iter(runs, console):
         data = data.append({"Dataset": ds, "Skw": skw, "Model": model, "F1": f1_avg}, ignore_index=True)
 
     return data
@@ -147,18 +178,20 @@ def wandb_runs_to_dataframe():
 def results_ranks(by_all: bool = typer.Option(False, help="Print a rank table for each dataset/skw combination"),
                 by_skewness: bool = typer.Option(False, help="Print a rank table for each skewness"), 
                 by_algorithm: bool = typer.Option(False, help="Print a rank table for each algorithm"),
+                save_to: str = typer.Option(None, help="Save the ranks in html format to the given file"),
                 all:bool = typer.Option(False, help="Equivalent to --by-all --by-skewness --by-algorithm")):
     """
     Print tables about rankings of the algorithms.
     """
-    console:Console = Console(record=True)
+
+    console:Console = Console(record=not save_to is None)
 
     if all:
         by_all = True
         by_skewness = True
         by_algorithm = True
 
-    grouped = wandb_runs_to_dataframe().groupby(["Dataset", "Skw"])
+    grouped = wandb_runs_to_dataframe(console).groupby(["Dataset", "Skw"])
 
     rc = RanksCounter(console)
 
@@ -172,9 +205,11 @@ def results_ranks(by_all: bool = typer.Option(False, help="Print a rank table fo
         rc.print_skw_ranks()
 
     if by_all:
-        grouped.apply(rc.print_rank_table)
+        grouped.apply(rc.add_rank_table)
+        rc.print_rank_tables()
 
-    console.save_html("results.html")
+    if save_to:
+        console.save_html(save_to)
 
 
 
