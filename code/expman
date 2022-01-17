@@ -29,6 +29,9 @@ from wandb.apis.public import File
 
 from exputils import *
 
+# 
+# RANKS COMMAND HELPER FUNCTIONS
+# 
 class RanksCounter:
     """
     Stores ranks for each algorithm in a dictionary and provides methods to print them
@@ -48,7 +51,7 @@ class RanksCounter:
 
     def hm(self, model):
         """
-        Returns a short model name
+        Hilights model name if it contains "FedAlgorithms.adaboost"
         """
         if model == "FedAlgorithms.adaboost":
             return "[bold]FedAlgorithms.adaboost.F1[/]"
@@ -84,7 +87,7 @@ class RanksCounter:
         global_ranks.sort(key=lambda x: x[1])
 
         for model, rank in global_ranks:
-            table.add_row(self.hm(model), f"{rank:.2f}")
+            table.add_row(self.hm(model), f"{rank:.3f}")
 
         self.console.print(table)
 
@@ -103,7 +106,7 @@ class RanksCounter:
             skw_ranks.sort(key=lambda x: x[1])
 
             for method, rank in skw_ranks:
-                table.add_row(self.hm(method), f"{rank:.2f}")
+                table.add_row(self.hm(method), f"{rank:.3f}")
 
             tables.append(table)
 
@@ -123,7 +126,7 @@ class RanksCounter:
         table.add_column("F1", justify="right", style="green")
 
         for i, row in enumerate(data.itertuples()):
-            table.add_row(str(i+1), self.hm(row.Model), f"{row.F1:.2f}")
+            table.add_row(str(i+1), self.hm(row.Model), f"{row.F1:.3f}")
 
         self.rank_tables.append(table)
 
@@ -133,7 +136,7 @@ class RanksCounter:
 
 def exp_iter(runs,console):
     """
-    Iterates over runs yielding ds, skw, model, f1_avg for each run
+    Generator that iterates over runs yielding ds, skw, model, f1_avg for each run
     """
     exps_by_skw = groupby(
         runs, lambda r: r.config["non_iidness"] + "|" + r.config["dataset"])
@@ -168,52 +171,15 @@ def wandb_runs_to_dataframe(console):
 
     runs = sorted(runs, key=lambda x: x.config["non_iidness"] + x.config["dataset"] + x.config["model"])
     data = pd.DataFrame(columns=["Dataset", "Skw", "Model", "F1"])
+
     for ds, skw, model, f1_avg in exp_iter(runs, console):
         data = data.append({"Dataset": ds, "Skw": skw, "Model": model, "F1": f1_avg}, ignore_index=True)
 
     return data
 
-
-@app.command("ranks")
-def results_ranks(by_all: bool = typer.Option(False, help="Print a rank table for each dataset/skw combination"),
-                by_skewness: bool = typer.Option(False, help="Print a rank table for each skewness"), 
-                by_algorithm: bool = typer.Option(False, help="Print a rank table for each algorithm"),
-                save_to: str = typer.Option(None, help="Save the ranks in html format to the given file"),
-                all:bool = typer.Option(False, help="Equivalent to --by-all --by-skewness --by-algorithm")):
-    """
-    Print tables about rankings of the algorithms.
-    """
-
-    console:Console = Console(record=not save_to is None)
-
-    if all:
-        by_all = True
-        by_skewness = True
-        by_algorithm = True
-
-    grouped = wandb_runs_to_dataframe(console).groupby(["Dataset", "Skw"])
-
-    rc = RanksCounter(console)
-
-    if by_algorithm or by_skewness:
-        grouped.apply(rc.add_rank)
-
-    if by_algorithm:
-        rc.print_global_rank()
-
-    if by_skewness:
-        rc.print_skw_ranks()
-
-    if by_all:
-        grouped.apply(rc.add_rank_table)
-        rc.print_rank_tables()
-
-    if save_to:
-        console.save_html(save_to)
-
-
-
-
+# 
+# GENERATE MAKEFILES HELPER FUNCTIONS
+# 
 
 def generate_exp_targets(test_run_opt: str, f: File, verbose=False) -> None:
     """
@@ -263,6 +229,9 @@ def generate_plot_targets(f:File, verbose=False) -> None:
     print(f"clean_all_plots:", file=f)
     print(f"\trm -f images/*.pdf", file=f)
     
+# 
+#   STATS COMMAND HELPER FUNCTIONS
+# 
 
 def launched_exps_stats() -> dict[str,int]:
     """
@@ -403,6 +372,57 @@ def print_progress_bar(experiments: list[ExpDescription], launched_exps: dict[st
         progress.update(task1, advance=launched_exps["completed"])
 
 
+# 
+# COMMANDS
+# 
+
+@app.command("ranks")
+def results_ranks(by_all: bool = typer.Option(False, help="Print a rank table for each dataset/skw combination"),
+                  by_skewness: bool = typer.Option(
+                      False, help="Print a rank table for each skewness"),
+                  by_algorithm: bool = typer.Option(
+                      False, help="Print a rank table for each algorithm"),
+                  save_to: str = typer.Option(
+                      None, help="Save the ranks in html format to the given file"),
+                  all: bool = typer.Option(False, help="Equivalent to --by-all --by-skewness --by-algorithm")):
+    """
+    Print tables about rankings of the algorithms.
+    """
+
+    console: Console = Console(record=not save_to is None)
+
+    if all:
+        by_all = True
+        by_skewness = True
+        by_algorithm = True
+
+    df = wandb_runs_to_dataframe(console)
+    grouped = df.groupby(["Dataset", "Skw"])
+
+    avgF1_adaF1 = df[df.Model == "FedAlgorithms.adaboost"].F1.mean()
+    avgF1_preW = df[df.Model == "FedAlgorithms.preweaksamme"].F1.mean()
+    console.print(f"Average F1 for AdaBoost: {avgF1_adaF1} for preweakSamme: {avgF1_preW} diff: {avgF1_adaF1 - avgF1_preW}")
+
+    console.print(df.groupby(["Skw", "Model"]).F1.mean())
+
+    rc = RanksCounter(console)
+
+    if by_algorithm or by_skewness:
+        grouped.apply(rc.add_rank)
+
+    if by_algorithm:
+        rc.print_global_rank()
+
+    if by_skewness:
+        rc.print_skw_ranks()
+
+    if by_all:
+        grouped.apply(rc.add_rank_table)
+        rc.print_rank_tables()
+
+    if save_to:
+        console.save_html(save_to)
+
 @app.command()
 def stats(verbose:bool=False) -> None:
     """
@@ -445,6 +465,10 @@ def generate_makefiles(outfile:str=typer.Argument("Makefile"),
         if plots:
             generate_plot_targets(f, verbose=verbose)
 
+
+# 
+# MAIN
+# 
 
 if __name__ == '__main__':
     app()
