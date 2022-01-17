@@ -298,6 +298,10 @@ def results_ranks(by_all: bool = typer.Option(False, help="Print a rank table fo
         by_algorithm = True
 
     df = wandb_runs_to_dataframe(console)
+    df = df[df.Model != "FedAlgorithms.samme"]
+    # df = df[df.Skw != "Noniidness.pathological_skw"]
+    print(df)
+
     grouped = df.groupby(["Dataset", "Skw"])
 
     avgF1_adaF1 = df[df.Model == "FedAlgorithms.adaboost"].F1.mean()

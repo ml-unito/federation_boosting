@@ -48,6 +48,9 @@ class RanksCounter:
         """
         Returns average rank of the given ranks
         """
+        if ranks == []:
+            return 100
+
         return sum(ranks) / len(ranks)
 
     def print_global_rank(self):
@@ -77,6 +80,7 @@ class RanksCounter:
             table = Table(title=f"[bold cyan]{skw}[/]")
             table.add_column("Algorithm", justify="left", style="cyan")
             table.add_column("Rank", justify="right", style="bold")
+
 
             skw_ranks = [[method, self.avg_rank(
                 self.ranks_by_skw[skw][method])] for method in self.ranks_by_skw[skw].keys()]
