@@ -48,8 +48,6 @@ class RanksCounter:
         """
         Returns average rank of the given ranks
         """
-        if ranks == []:
-            return 100
 
         return sum(ranks) / len(ranks)
 
@@ -62,7 +60,7 @@ class RanksCounter:
         table.add_column("Rank", justify="right", style="bold")
 
         global_ranks = [[method, self.avg_rank(
-            self.ranks[method])] for method in self.ranks.keys()]
+            self.ranks[method])] for method in self.ranks.keys() if self.ranks[method] != []]
         global_ranks.sort(key=lambda x: x[1])
 
         for model, rank in global_ranks:
@@ -83,7 +81,7 @@ class RanksCounter:
 
 
             skw_ranks = [[method, self.avg_rank(
-                self.ranks_by_skw[skw][method])] for method in self.ranks_by_skw[skw].keys()]
+                self.ranks_by_skw[skw][method])] for method in self.ranks_by_skw[skw].keys() if self.ranks[method] != []]
             skw_ranks.sort(key=lambda x: x[1])
 
             for method, rank in skw_ranks:
