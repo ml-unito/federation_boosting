@@ -87,3 +87,12 @@ def experiment_list(verbose: bool = False) -> Tuple[list[ExpDescription], list[E
             result.append(experiment)
 
     return result, skipped
+
+def hm(model):
+    """
+    Hilights model name if it contains "FedAlgorithms.adaboost"
+    """
+    if model == "FedAlgorithms.adaboost" or model == "FedAlgorithms.adaboost.f1":
+        return "[bold]FedAlgorithms.adaboost.F1[/]"
+    else:
+        return model

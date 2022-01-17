@@ -3,6 +3,7 @@ from rich.panel import Panel
 from rich.columns import Columns
 from copy import deepcopy
 import pandas as pd
+from exputils import hm
 
 class RanksCounter:
     """
@@ -22,15 +23,6 @@ class RanksCounter:
         }
         self.console = console
         self.rank_tables = []
-
-    def hm(self, model):
-        """
-        Hilights model name if it contains "FedAlgorithms.adaboost"
-        """
-        if model == "FedAlgorithms.adaboost":
-            return "[bold]FedAlgorithms.adaboost.F1[/]"
-        else:
-            return model
 
     def add_rank(self, group):
         """
@@ -64,7 +56,7 @@ class RanksCounter:
         global_ranks.sort(key=lambda x: x[1])
 
         for model, rank in global_ranks:
-            table.add_row(self.hm(model), f"{rank:.3f}")
+            table.add_row(hm(model), f"{rank:.3f}")
 
         self.console.print(table)
 
@@ -85,7 +77,7 @@ class RanksCounter:
             skw_ranks.sort(key=lambda x: x[1])
 
             for method, rank in skw_ranks:
-                table.add_row(self.hm(method), f"{rank:.3f}")
+                table.add_row(hm(method), f"{rank:.3f}")
 
             tables.append(table)
 
@@ -107,10 +99,10 @@ class RanksCounter:
         table.add_column("F1", justify="right", style="green")
 
         for i, row in enumerate(data.itertuples()):
-            table.add_row(str(i+1), self.hm(row.Model), f"{row.F1:.3f}")
+            table.add_row(str(i+1), hm(row.Model), f"{row.F1:.3f}")
 
         self.rank_tables.append(table)
 
     def print_rank_tables(self):
         self.console.print(Panel(Columns(
-            self.rank_tables), title="[bold magenta]By Skewness[/]", border_style="magenta"))
+            self.rank_tables), title="[bold magenta]All Experiments[/]", border_style="magenta"))

@@ -18,6 +18,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.progress import track
 from rich.progress import Progress, TaskID
+import rich.traceback as traceback
 
 import glob
 from itertools import groupby
@@ -29,6 +30,9 @@ from wandb.apis.public import File
 
 from exputils import *
 from rankscounter import RanksCounter
+
+traceback.install()
+
 
 # 
 # RANKS COMMAND HELPER FUNCTIONS
@@ -275,7 +279,49 @@ def print_progress_bar(experiments: list[ExpDescription], launched_exps: dict[st
 
 # 
 # COMMANDS
-# 
+#
+
+@app.command()
+def f1_averages():
+    """
+    Prints F1 averages (globally and by skw)
+    """
+    df = wandb_runs_to_dataframe(console)
+
+    globtable = Table(title="[bold red]All Skws[/]")
+    globtable.add_column("Model", justify="left", style="red")
+    globtable.add_column("E[F1]", justify="right", style="bold")
+
+    modelf1s = []
+    for model in ["FedAlgorithms.samme", "FedAlgorithms.preweaksamme", "FedAlgorithms.distsamme", "FedAlgorithms.adaboost"]:
+        modelf1s.append([model, df[df.Model == model].F1.mean()])
+    
+    modelf1s = sorted(modelf1s, key=lambda x: x[1], reverse=True)
+    for modelf1 in modelf1s:
+        globtable.add_row(hm(modelf1[0]), f"{modelf1[1]:.3f}")
+
+    console.print(globtable)
+
+    tables = []
+    for skw, group in df.groupby(["Skw"]):
+        table = Table(title=f"[bold cyan]{skw}[/]")
+        table.add_column("Model", justify="left", style="cyan")
+        table.add_column("E[F1]", justify="right", style="green")
+
+        modelf1s = []
+        for model, subgroup in group.groupby(["Model"]):
+            modelf1s.append([model, subgroup.F1.mean()])
+
+        modelf1s = sorted(modelf1s, key=lambda x: x[1], reverse=True)
+        for modelf1 in modelf1s:
+            table.add_row(hm(modelf1[0]), f"{modelf1[1]:.3f}")
+
+        tables.append(table)
+
+    console.print(Panel(Columns(tables), title="F1 Averages by Skw", border_style="cyan"))
+
+
+
 
 @app.command("ranks")
 def results_ranks(by_all: bool = typer.Option(False, help="Print a rank table for each dataset/skw combination"),
@@ -285,6 +331,7 @@ def results_ranks(by_all: bool = typer.Option(False, help="Print a rank table fo
                       False, help="Print a rank table for each algorithm"),
                   save_to: str = typer.Option(
                       None, help="Save the ranks in html format to the given file"),
+                  omit_models: str = typer.Option([], help="Comma separated list of models that should be omitted from the rank tables."),
                   all: bool = typer.Option(False, help="Equivalent to --by-all --by-skewness --by-algorithm")):
     """
     Print tables about rankings of the algorithms.
@@ -298,17 +345,11 @@ def results_ranks(by_all: bool = typer.Option(False, help="Print a rank table fo
         by_algorithm = True
 
     df = wandb_runs_to_dataframe(console)
-    df = df[df.Model != "FedAlgorithms.samme"]
-    # df = df[df.Skw != "Noniidness.pathological_skw"]
-    print(df)
+
+    for model in omit_models.split(","):
+        df = df[df.Model != model]
 
     grouped = df.groupby(["Dataset", "Skw"])
-
-    avgF1_adaF1 = df[df.Model == "FedAlgorithms.adaboost"].F1.mean()
-    avgF1_preW = df[df.Model == "FedAlgorithms.preweaksamme"].F1.mean()
-    console.print(f"Average F1 for AdaBoost: {avgF1_adaF1} for preweakSamme: {avgF1_preW} diff: {avgF1_adaF1 - avgF1_preW}")
-
-    console.print(df.groupby(["Skw", "Model"]).F1.mean())
 
     rc = RanksCounter(console)
 
