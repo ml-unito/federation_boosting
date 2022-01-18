@@ -331,7 +331,7 @@ def results_ranks(by_all: bool = typer.Option(False, help="Print a rank table fo
                       False, help="Print a rank table for each algorithm"),
                   save_to: str = typer.Option(
                       None, help="Save the ranks in html format to the given file"),
-                  omit_models: str = typer.Option([], help="Comma separated list of models that should be omitted from the rank tables."),
+                  omit_models: str = typer.Option(None, help="Comma separated list of models that should be omitted from the rank tables."),
                   all: bool = typer.Option(False, help="Equivalent to --by-all --by-skewness --by-algorithm")):
     """
     Print tables about rankings of the algorithms.
@@ -346,8 +346,9 @@ def results_ranks(by_all: bool = typer.Option(False, help="Print a rank table fo
 
     df = wandb_runs_to_dataframe(console)
 
-    for model in omit_models.split(","):
-        df = df[df.Model != model]
+    if omit_models:
+        for model in omit_models.split(","):
+            df = df[df.Model != model]
 
     grouped = df.groupby(["Dataset", "Skw"])
 
