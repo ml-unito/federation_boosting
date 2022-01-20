@@ -1,3 +1,5 @@
+from functools import cache
+from genericpath import exists
 import pandas as pd
 import wandb
 
@@ -31,35 +33,63 @@ def avg_stats(runs:list, stat:str) -> pd.DataFrame:
     return np.mean(stats, axis=0), np.std(stats, axis=0)
 
 
+def get_plot_data_from_wandb(dataset, non_iidness):
+    api: wandb.Api = wandb.Api()
+
+    entity, project = "mlgroup", "FederatedAdaboost "
+    runs = api.runs(entity + "/" + project, filters={
+                    "config.dataset": dataset, "config.non_iidness": non_iidness}, order="config.model")
+
+    exps_by_model = groupby(runs, lambda r: r.config["model"])
+
+    data = pd.DataFrame()
+    for model, runs in exps_by_model:
+        for run in runs:
+            history = run.history()
+            history = history.assign(model=model)
+            data = data.append(history, ignore_index=True)
+
+    return data
+
+
+def plot_data_fname(dataset, non_iidness):
+    return f"cache/df_{dataset}_{non_iidness}.pickle"
+
+def get_plot_data(dataset, non_iidness):
+    cached_data_fname = plot_data_fname(dataset, non_iidness)
+    if not exists(cached_data_fname):
+        data = get_plot_data_from_wandb(dataset, non_iidness)
+        data.to_pickle(cached_data_fname)
+        return data
+    else:
+        return pd.read_pickle(cached_data_fname)
 
 @app.command()
 def plot(dataset:str, non_iidness:str):
     """
     Plot the results of the runs
     """
-    api:wandb.Api = wandb.Api()
     entity:str
     project:str 
 
-    entity, project = "mlgroup", "FederatedAdaboost "
-    runs = api.runs(entity + "/" + project, filters={"config.dataset": dataset, "config.non_iidness": non_iidness}, order="config.model")
+    dataset = dataset.replace("-", "_")
 
-    exps_by_model = groupby(runs, lambda r: r.config["model"])
-
-    data = pd.DataFrame()
-    for model,runs in exps_by_model:
-        for run in runs:
-            history = run.history()
-            history = history.assign(model=model)
-            data = data.append(history, ignore_index=True)
+    data = get_plot_data(dataset, non_iidness)
 
     try:
-        fig,ax = plt.subplots(1,1)
-        sns.lineplot(data=data, x="_step", hue="model", y="test.f1", ax=ax)
+        sns.set(font_scale=2)
+        fig,ax = plt.subplots(figsize=(12,9))
+        sns.lineplot(data=data, x="_step", hue="model", y="test.f1", ax=ax, legend=False)
+
+        # plt.ylim(0.6, 1.0)
+        plt.xlabel("Adaboost step ($t$)")
+        plt.ylabel("F1")
+
         plt.savefig(plot_fname(dataset, non_iidness))
         plt.close(fig)
-    except(ValueError):
+    except ValueError as exc:
         console.print(f"Data error for {dataset} {non_iidness}")
+        console.print(exc)
 
 @app.command()
 def plot_all(verbose:bool=False):

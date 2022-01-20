@@ -131,8 +131,10 @@ def generate_plot_targets(f:File, verbose=False) -> None:
 
     filename_str = " ".join(filenames)
     print(f"all_plots:{filename_str}", file=f)
-    print(f"clean_all_plots:", file=f)
-    print(f"\trm -f images/*.pdf", file=f)
+    print("clean_all_plots:", file=f)
+    print("\tfind images -name \"*.pdf\" -exec rm {} \;", file=f)
+    print("copy_plots_to_paper:", file=f)
+    print("\tfind images \( -name \"*kr_vs_kp*.pdf\" -or -name \"*letter*.pdf\" -or -name \"*segmentation*.pdf\" \) -exec cp {} ../papers/2022-ijcnn/images/ \;", file=f)
     
 # 
 #   STATS COMMAND HELPER FUNCTIONS

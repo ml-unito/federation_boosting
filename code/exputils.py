@@ -23,7 +23,16 @@ def plot_iidness_name(iidness: str) -> str:
     return f"Noniidness.{iidness}"
 
 def plot_fname(dataset: str, noniidness: str) -> str:
-    return f"images/f1_{dataset}_{noniidness}.pdf"
+    if dataset == "Datasets.kr-vs-kp":
+        dataset = "Datasets.kr_vs_kp"
+
+    skw_maps = {"Noniidness.uniform": "uniform", 
+                "Noniidness.num_examples_skw":"num_examples", 
+                "Noniidness.lbl_skw":"lbl",
+                "Noniidness.dirichlet_lbl_skw":"dirichlet", 
+                "Noniidness.pathological_skw":"pathological", 
+                "Noniidness.covariate_shift": "covariate_shift" }
+    return f"images/skw/{skw_maps[noniidness]}/f1_{dataset}_{noniidness}.pdf"
 
 def plotlist(verbose=False) -> list[str, str]:
     def plot_to_skip(exp):
