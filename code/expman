@@ -134,7 +134,9 @@ def generate_plot_targets(f:File, verbose=False) -> None:
     print("clean_all_plots:", file=f)
     print("\tfind images -name \"*.pdf\" -exec rm {} \;", file=f)
     print("copy_plots_to_paper:", file=f)
-    print("\tfind images \( -name \"*kr_vs_kp*.pdf\" -or -name \"*letter*.pdf\" -or -name \"*segmentation*.pdf\" \) -exec cp {} ../papers/2022-ijcnn/images/ \;", file=f)
+    print("\tfind images \( -name \"*kr_vs_kp*.pdf\" -or -name \"*letter*.pdf\" -or -name \"*segmentation*.pdf\" -or -name \"*adult*.pdf\" -or -name \"*pendigits*.pdf\" \) -exec cp {} ../papers/2022-ijcnn/images/ \;", file=f)
+    print("create_tikz_files: cache/*", file=f)
+    print("\tfind cache -name \"*.pickle\" -print -exec python3 tocsv.py {} \;", file=f)
     
 # 
 #   STATS COMMAND HELPER FUNCTIONS
