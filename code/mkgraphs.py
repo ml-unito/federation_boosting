@@ -77,7 +77,7 @@ def plot(dataset:str, non_iidness:str):
     data = get_plot_data(dataset, non_iidness)
 
     try:
-        sns.set(font_scale=2)
+        sns.set(font_scale=2.5)
         fig,ax = plt.subplots(figsize=(12,9))
         sns.lineplot(data=data, x="_step", hue="model", y="test.f1", ax=ax, legend=False)
 
