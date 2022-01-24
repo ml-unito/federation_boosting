@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from __future__ import division, print_function, annotations
-from os import name
 from typing import Any, Tuple, Dict, List, Generator, Optional
 from copy import deepcopy
 from math import log
@@ -16,6 +15,10 @@ from sklearn.datasets import load_svmlight_file
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from optparse import OptionParser
+from numpy.random import permutation
+
+import os
+import dload
 import json
 import wandb
 
@@ -104,6 +107,19 @@ def load_classification_dataset(name_or_path: str,
         y_tr = le.transform(y_tr)
         y_te = le.transform(y_te)
         return X_tr, X_te, y_tr, y_te
+    elif name_or_path == "forestcover":
+        if not os.path.isfile("covtype.data"):
+            dload.save_unzip(
+                "https://archive.ics.uci.edu/ml/machine-learning-databases/covtype/covtype.data.gz")
+        covtype_df = pd.read_csv("covtype.data", header=None)
+        covtype_df = covtype_df[covtype_df[54] < 3]
+        X = covtype_df.loc[:, :53].to_numpy()
+        y = (covtype_df.loc[:, 54] - 1).to_numpy()
+        ids = permutation(X.shape[0])
+        X, y = X[ids], y[ids]
+        X_train, X_test = X[:250000], X[250000:]
+        y_train, y_test = y[:250000], y[250000:]
+        return X_train, X_test, y_train, y_test
     else:
         X, y = load_svmlight_file(name_or_path)
         y = LabelEncoder().fit_transform(y)
