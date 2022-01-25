@@ -56,7 +56,7 @@ def experiment_to_skip(ds: str, seed: int, model: str, noniid: str, verbose: boo
         "lbl_skw", "dirichlet_lbl_skw", "pathological_skw" (these are binary datasets which cannot
         work with these types of non-iidness)        
     """
-    if ds in ["adult", "kr-vs-kp"] and noniid in ["lbl_skw", "dirichlet_lbl_skw", "pathological_skw"]:
+    if ds in ["adult", "kr-vs-kp", "forestcover"] and noniid in ["lbl_skw", "dirichlet_lbl_skw", "pathological_skw"]:
         if verbose:
             console.log(
                 f"[bold yellow]Skipping[/] {ds} {seed} {model} {noniid}")
