@@ -105,6 +105,19 @@ def load_classification_dataset(name: str,
         X_tr = X_tr.toarray()
         X_te = X_te.toarray()
         return X_tr, X_te, y_tr, y_te
+    elif name == "forestcover":
+        if not os.path.isfile("covtype.data"):
+            dload.save_unzip(
+                "https://archive.ics.uci.edu/ml/machine-learning-databases/covtype/covtype.data.gz")
+        covtype_df = pd.read_csv("covtype.data", header=None)
+        covtype_df = covtype_df[covtype_df[54] < 3]
+        X = covtype_df.loc[:, :53].to_numpy()
+        y = (covtype_df.loc[:, 54] - 1).to_numpy()
+        ids = permutation(X.shape[0])
+        X, y = X[ids], y[ids]
+        X_train, X_test = X[:250000], X[250000:]
+        y_train, y_test = y[:250000], y[250000:]
+        return X_train, X_test, y_train, y_test
     else:
         X, y = load_svmlight_file("data/" + name + ".svmlight")
         X = X.toarray()
