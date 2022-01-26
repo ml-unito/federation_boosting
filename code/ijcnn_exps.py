@@ -109,10 +109,10 @@ def load_classification_dataset(name: str,
         X_te = X_te.toarray()
         return X_tr, X_te, y_tr, y_te
     elif name == "forestcover":
-        if not os.path.isfile("covtype.data"):
+        if not os.path.isfile("data/covtype.data"):
             dload.save_unzip(
                 "https://archive.ics.uci.edu/ml/machine-learning-databases/covtype/covtype.data.gz")
-        covtype_df = pd.read_csv("covtype.data", header=None)
+        covtype_df = pd.read_csv("data/covtype.data", header=None)
         covtype_df = covtype_df[covtype_df[54] < 3]
         X = covtype_df.loc[:, :53].to_numpy()
         y = (covtype_df.loc[:, 54] - 1).to_numpy()
