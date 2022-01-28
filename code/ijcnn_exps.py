@@ -273,7 +273,7 @@ def execute_local_samme(dataset, client, seed, test_size, n_clients, non_iidness
     X_, y_ = X_tr[client], y_tr[client]
 
     console.log("Training...", style="bold green")
-    for strong_learner in learner.fit(X_, y_, N_ESTIMATORS):
+    for strong_learner in learner.fit(X_, y_, N_ESTIMATORS, num_labels=len(set(y_train))):
         y_pred_tr = strong_learner.predict(X_)
         y_pred_te = strong_learner.predict(X_test)
         step = strong_learner.num_weak_learners()
@@ -373,4 +373,4 @@ def run(dataset: Datasets = typer.Argument(...),
     Path(run_file).unlink()
 
 if __name__ == "__main__":
-    typer.run(run)
+    app()

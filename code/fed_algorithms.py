@@ -34,10 +34,11 @@ class Samme(MulticlassBoosting):
             X: np.ndarray,
             y: np.ndarray,
             checkpoints: Optional[List[int]] = None,
-            seed: int = 42) -> Generator[Samme]:
+            seed: int = 42,
+            num_labels = None) -> Generator[Samme]:
 
         np.random.seed(seed)
-        self.K = len(set(y))  # assuming that all classes are in y
+        self.K = len(set(y)) if not num_labels else num_labels # assuming that all classes are in y
         cks = set(checkpoints) if checkpoints is not None else [self.n_clf]
         n_samples = X.shape[0]
         D = np.full(n_samples, (1 / n_samples))
