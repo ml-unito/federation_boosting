@@ -240,14 +240,107 @@ def execute_experiment(dataset, seed, test_size, n_clients, model, normalize, no
         else:
             console.log(log_dict)
 
+def execute_local_samme(dataset, client, seed, test_size, n_clients, non_iidness, tags, test_run):
+    options = deepcopy(locals())
+
+    WEAK_LEARNER = DecisionTreeClassifier(random_state=seed, max_leaf_nodes=10)
+    N_ESTIMATORS: List[int] = [1] if test_run else [1] + list(range(10, 301, 10))
+    TAGS = tags.strip().split(",") if tags else []
+    options["tags"] = TAGS
+
+    console.log("Configuration:", options, style="bold green")
+
+    if not test_run:
+        wandb.init(project='FederatedAdaboost',
+                    entity='mlgroup',
+                    name=f"{dataset.value}_localsamme{client}_{non_iidness.value}_{seed}",
+                    tags=TAGS,
+                    config=options)
+
+    X_train, X_test, y_train, y_test = load_classification_dataset(name=dataset.value,
+                                                                    test_size=test_size,
+                                                                    seed=seed)
+
+    console.log(f"# weak learners: {N_ESTIMATORS}", style="italic")
+    console.log(f"Training set size: {X_train.shape[0]}", style="italic")
+    console.log(f"Test set size: {X_test.shape[0]}", style="italic")
+    console.log(f"# classes: {len(set(y_train))}", style="italic")
+
+    X_tr, y_tr = distribute_dataset(
+        X_train, y_train, n_clients, non_iidness, seed)
+
+    learner = Samme(max(N_ESTIMATORS), WEAK_LEARNER)
+    X_, y_ = X_tr[client], y_tr[client]
+
+    console.log("Training...", style="bold green")
+    for strong_learner in learner.fit(X_, y_, N_ESTIMATORS):
+        y_pred_tr = strong_learner.predict(X_)
+        y_pred_te = strong_learner.predict(X_test)
+        step = strong_learner.num_weak_learners()
+
+        log_dict = {
+            "train": {
+                "n_estimators": step,
+                "accuracy": accuracy_score(y_, y_pred_tr),
+                "precision": precision_score(y_, y_pred_tr, average="micro"),
+                "recall": recall_score(y_, y_pred_tr, average="micro"),
+                "f1": f1_score(y_, y_pred_tr, average="micro")
+            },
+            "test": {
+                "n_estimators": step,
+                "accuracy": accuracy_score(y_test, y_pred_te),
+                "precision": precision_score(y_test, y_pred_te, average="micro"),
+                "recall": recall_score(y_test, y_pred_te, average="micro"),
+                "f1": f1_score(y_test, y_pred_te, average="micro")
+            }
+        }
+
+        if not test_run:
+            wandb.log(log_dict, step=step)
+        else:
+            console.log(log_dict)
+
+
+
+@app.command()
+def run_samme_local(dataset: Datasets = typer.Argument(...), 
+        client: int = typer.Option(0,
+                                help="Number of local client to test"),
+        seed: int = typer.Option(0, 
+                                help="Pseudo-random seed for replicability purposes - default=98765. Seeds from"
+                                     " 0 to 7 are automatically mapped to 'better' seeds."),
+        test_size:float=typer.Option(0.2, help="Test set size in percentage (0,1)"), 
+        n_clients:int=typer.Option(10,
+                                help="Number of clients (>= 1)"),
+        non_iidness:Noniidness=typer.Option("uniform", help="Whether the instances have to be distributed in a non-iid way."),
+        tags:str=typer.Option("", help="list of comma separated tags to be added in the wandb lod"),
+        test_run:bool=typer.Option(True, help="Launch the script without WANDB support and training a single WL")):
+
+    filename = f"logs/ijcnnexps_ds_{dataset.value}_model_localsamme{client}_noniid_{non_iidness.value}_seed_{seed}"
+    run_file = filename+".run"
+    err_file = filename+".err"
+    log_file = filename+".log"
+
+    Path(run_file).touch()
+
+    try:
+        execute_local_samme(dataset, client, seed, test_size, n_clients, non_iidness, tags, test_run)
+
+        console.log("Training complete!")
+        console.save_text(log_file)
+    except:
+        console.print_exception(show_locals=True)
+        console.save_text(err_file)
+
+    Path(run_file).unlink()
+
 
 @app.command()
 def run(dataset: Datasets = typer.Argument(...), 
         seed: int = typer.Option(0, 
                                 help="Pseudo-random seed for replicability purposes - default=98765. Seeds from"
                                      " 0 to 7 are automatically mapped to 'better' seeds."),
-        test_size:float=typer.Option(0.2,
-                                help="Test set size in percentage (0,1)"), 
+        test_size:float=typer.Option(0.2, help="Test set size in percentage (0,1)"), 
         n_clients:int=typer.Option(10,
                                 help="Number of clients (>= 1)"),
         model:FedAlgorithms=typer.Option("samme", 
