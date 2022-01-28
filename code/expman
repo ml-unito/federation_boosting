@@ -102,11 +102,9 @@ def generate_exp_targets(test_run_opt: str, f: File, verbose=False) -> None:
         noniid: str
         ds, seed, model, noniid = experiment
 
-        experiment_tags.append(
-            f"logs/ijcnnexps_ds_{ds}_model_{model}_noniid_{noniid}_seed_{seed}.log")
+        experiment_tags.append(f"logs/ijcnnexps_ds_{ds}_model_{model}_noniid_{noniid}_seed_{seed}.log")
         print(f"{experiment_tags[-1]}:", file=f)
-        print(
-            f"\tpython3 ijcnn_exps.py --seed={seed} --n-clients=10 --model={model} --non-iidness={noniid} --tags=IJCNN {test_run_opt} {ds}", file=f)
+        print(f"\tpython3 ijcnn_exps.py run --seed={seed} --n-clients=10 --model={model} --non-iidness={noniid} --tags=IJCNN {test_run_opt} {ds}", file=f)
 
     exp_tags_str: str = " ".join(experiment_tags)
     print(f"all:{exp_tags_str}", file=f)
@@ -114,6 +112,18 @@ def generate_exp_targets(test_run_opt: str, f: File, verbose=False) -> None:
     print(f"clean_all_logs:", file=f)
     print(f"\trm -f logs/*.log", file=f)
     print(f"\trm -f logs/*.err", file=f)
+
+def generate_localexp_targets(test_run_opt: str, f: File, verbose=False) -> None:
+    experiment_tags = []
+    for client in range(10):
+        for skw in NONIID:
+            experiment_tags.append(f"logs/ijcnnexps_ds_pendigits_model_localsamme{client}_noniid_{skw}_seed_0.log")
+            print(f"{experiment_tags[-1]}:", file=f)
+            print(f"\tpython3 ijcnn_exps.py  run-samme-local --client={client} --seed={0} --n-clients=10 --non-iidness={skw} --tags=IJCNN-local {test_run_opt} pendigits", file=f)
+
+    exp_tags_str: str = " ".join(experiment_tags)
+    print(f"all_local_exps:{exp_tags_str}", file=f)
+
 
 def generate_plot_targets(f:File, verbose=False) -> None:
     """
@@ -398,7 +408,8 @@ def stats(verbose:bool=False) -> None:
 def generate_makefiles(outfile:str=typer.Argument("Makefile"),
                         exps:bool=typer.Option(True, help="Generate entries for the experiments"),
                         plots:bool=typer.Option(True, help="Generate entries for the plots"),
-                        verbose:bool=False, test_run:bool=True) -> None:
+                        verbose:bool=False, 
+                        test_run:bool=True) -> None:
     """
     Generates a Makefile allowing to launch the experiments presented in  (Polato, Esposito, et al. 2022)
 
@@ -412,6 +423,7 @@ def generate_makefiles(outfile:str=typer.Argument("Makefile"),
     with open(outfile, "w") as f:
         if exps:
             generate_exp_targets(test_run_opt, f, verbose=verbose)
+            generate_localexp_targets(test_run_opt, f, verbose=verbose)
         
         if plots:
             generate_plot_targets(f, verbose=verbose)
