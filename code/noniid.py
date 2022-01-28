@@ -126,7 +126,7 @@ def noise_feat_dist_skew(X: np.ndarray,
     The function divide the whole dataset into multiple parties randomly and equally.
     For each party, we add different levels of Gaussian noise to its local dataset to
     achieve different feature distributions. Specifically, given user-defined noise level sigma,
-    we add noises ∼ Gau(sigma * i/N) for Party i, where Gau(sigma * i/N) is a Gaussian distribution
+    we add noises ~ Gau(sigma * i/N) for Party i, where Gau(sigma * i/N) is a Gaussian distribution
     with mean 0 and variance sigma * i/N.
     See: https://arxiv.org/pdf/2102.02079.pdf
 
