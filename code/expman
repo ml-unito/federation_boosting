@@ -115,11 +115,13 @@ def generate_exp_targets(test_run_opt: str, f: File, verbose=False) -> None:
 
 def generate_localexp_targets(test_run_opt: str, f: File, verbose=False) -> None:
     experiment_tags = []
+
     for client in range(10):
         for skw in NONIID:
-            experiment_tags.append(f"logs/ijcnnexps_ds_pendigits_model_localsamme{client}_noniid_{skw}_seed_0.log")
-            print(f"{experiment_tags[-1]}:", file=f)
-            print(f"\tpython3 ijcnn_exps.py  run-samme-local --client={client} --seed={0} --n-clients=10 --non-iidness={skw} --tags=IJCNN-local {test_run_opt} pendigits", file=f)
+            for seed in SEEDS:
+                experiment_tags.append(f"logs/ijcnnlocalexps_ds_pendigits_model_localsamme{client}_noniid_{skw}_seed_{seed}.log")
+                print(f"{experiment_tags[-1]}:", file=f)
+                print(f"\tpython3 ijcnn_exps.py  run-samme-local --client={client} --seed={seed} --n-clients=10 --non-iidness={skw} --tags=IJCNN-local {test_run_opt} pendigits", file=f)
 
     exp_tags_str: str = " ".join(experiment_tags)
     print(f"all_local_exps:{exp_tags_str}", file=f)
@@ -160,9 +162,9 @@ def launched_exps_stats() -> dict[str,int]:
         "failed": the number of experiments that have been launched and failed
         "running": the number of experiments that have been launched and are still running
     """
-    completed: list[str] = glob.glob("logs/*.log")
-    failed: list[str] = glob.glob("logs/*.err")
-    running: list[str] = glob.glob("logs/*.run")
+    completed: list[str] = glob.glob("logs/ijcnnexps*.log")
+    failed: list[str] = glob.glob("logs/ijcnnexps*.err")
+    running: list[str] = glob.glob("logs/ijcnnexps*.run")
 
     return { "completed": len(completed), "failed": len(failed), "running": len(running) }
 
@@ -217,7 +219,7 @@ def print_failed_exps_table(launched_exps: dict[str, int]) -> None:
     Prints a table with the experiments that failed.
     """
     if launched_exps["failed"] > 0:
-        failed_exps: list[str] = glob.glob("logs/*.err")
+        failed_exps: list[str] = glob.glob("logs/ijcnnexps*.err")
         table: Table = Table(title="[bold red]Failed experiments[/]")
         table.add_column("#", justify="right", style="bold")
         table.add_column("Experiment", justify="left", style="magenta")

@@ -316,7 +316,7 @@ def run_samme_local(dataset: Datasets = typer.Argument(...),
         tags:str=typer.Option("", help="list of comma separated tags to be added in the wandb lod"),
         test_run:bool=typer.Option(True, help="Launch the script without WANDB support and training a single WL")):
 
-    filename = f"logs/ijcnnexps_ds_{dataset.value}_model_localsamme{client}_noniid_{non_iidness.value}_seed_{seed}"
+    filename = f"logs/ijcnnlocalexps_ds_{dataset.value}_model_localsamme{client}_noniid_{non_iidness.value}_seed_{seed}"
     run_file = filename+".run"
     err_file = filename+".err"
     log_file = filename+".log"
