@@ -97,6 +97,32 @@ def experiment_list(verbose: bool = False) -> Tuple[list[ExpDescription], list[E
 
     return result, skipped
 
+def local_experiment_list(verbose: bool = False) -> Tuple[list[ExpDescription], list[ExpDescription]]:
+    """
+    Returns a list of all the local experiments that should be launched (i.e., the 
+    list of all experiments minus the ones that should be skipped).
+
+    if verbose is True, then skipped experiments are logged to stdout.
+    """
+    experiments: list[ExpDescription] = list(product(range(10), NONIID, SEEDS))
+    return experiments, []
+
+    # result = []
+    # # skipped = []
+
+    # for experiment in experiments:
+    #     # ds: str
+    #     # seed: int
+    #     # model: str
+    #     # noniid: str
+
+    #     # ds, seed, model, noniid = experiment
+
+    #     result.append(experiment)
+
+    # return result, []
+
+
 def hm(model):
     """
     Hilights model name if it contains "FedAlgorithms.adaboost"

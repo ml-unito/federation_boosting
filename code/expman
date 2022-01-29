@@ -114,14 +114,15 @@ def generate_exp_targets(test_run_opt: str, f: File, verbose=False) -> None:
     print(f"\trm -f logs/*.err", file=f)
 
 def generate_localexp_targets(test_run_opt: str, f: File, verbose=False) -> None:
+    experiments, _ = local_experiment_list(verbose)
     experiment_tags = []
 
-    for client in range(10):
-        for skw in NONIID:
-            for seed in SEEDS:
-                experiment_tags.append(f"logs/ijcnnlocalexps_ds_pendigits_model_localsamme{client}_noniid_{skw}_seed_{seed}.log")
-                print(f"{experiment_tags[-1]}:", file=f)
-                print(f"\tpython3 ijcnn_exps.py  run-samme-local --client={client} --seed={seed} --n-clients=10 --non-iidness={skw} --tags=IJCNN-local {test_run_opt} pendigits", file=f)
+    for experiment in track(experiments, "Generating local experiment targets"):
+        client, skw, seed = experiment
+
+        experiment_tags.append(f"logs/ijcnnlocalexps_ds_pendigits_model_localsamme{client}_noniid_{skw}_seed_{seed}.log")
+        print(f"{experiment_tags[-1]}:", file=f)
+        print(f"\tpython3 ijcnn_exps.py  run-samme-local --client={client} --seed={seed} --n-clients=10 --non-iidness={skw} --tags=IJCNN-local {test_run_opt} pendigits", file=f)
 
     exp_tags_str: str = " ".join(experiment_tags)
     print(f"all_local_exps:{exp_tags_str}", file=f)
@@ -167,6 +168,22 @@ def launched_exps_stats() -> dict[str,int]:
     running: list[str] = glob.glob("logs/ijcnnexps*.run")
 
     return { "completed": len(completed), "failed": len(failed), "running": len(running) }
+
+
+def local_launched_exps_stats() -> dict[str, int]:
+    """
+    Returns statistics about the experiments that have been launched. 
+    The statistics are returned as a dictionary with the following keys:
+        "completed": the number of experiments that have been launched and completed
+        "failed": the number of experiments that have been launched and failed
+        "running": the number of experiments that have been launched and are still running
+    """
+    completed: list[str] = glob.glob("logs/ijcnnlocalexps*.log")
+    failed: list[str] = glob.glob("logs/ijcnnlocalexps*.err")
+    running: list[str] = glob.glob("logs/ijcnnlocalexps*.run")
+
+    return {"completed": len(completed), "failed": len(failed), "running": len(running)}
+
 
 def get_elapsed(exp:str) -> timedelta:
     """
@@ -214,12 +231,12 @@ def print_general_stats(experiments: list[ExpDescription], skipped: list[ExpDesc
     console.print(Columns([panel1, panel2]))
 
 
-def print_failed_exps_table(launched_exps: dict[str, int]) -> None:
+def print_failed_exps_table(launched_exps: dict[str, int], local: str="") -> None:
     """
     Prints a table with the experiments that failed.
     """
     if launched_exps["failed"] > 0:
-        failed_exps: list[str] = glob.glob("logs/ijcnnexps*.err")
+        failed_exps: list[str] = glob.glob(f"logs/ijcnn{local}exps*.err")
         table: Table = Table(title="[bold red]Failed experiments[/]")
         table.add_column("#", justify="right", style="bold")
         table.add_column("Experiment", justify="left", style="magenta")
@@ -237,11 +254,12 @@ def log_name_to_wandb(logname:str) -> str:
     Returns the name of the experiment in wandb format.
     logname: the name of the experiment in log format.
     """
-    regexp = re.compile(r"logs/ijcnnexps_ds_(?P<ds>\w+)_model_(?P<model>(\w|\.)+)_noniid_(?P<noniid>\w+)_seed_(?P<seed>\d+).(run|log|err)")
+    regexp = re.compile(r"logs/ijcnn(?P<kind>exps|localexps)_ds_(?P<ds>\w+)_model_(?P<model>(\w|\.)+)_noniid_(?P<noniid>\w+)_seed_(?P<seed>\d+).(run|log|err)")
     match = regexp.match(logname)
     if match is None:
         raise ValueError(f"The log name {logname} does not match the expected format")
     
+    # _ = match.group("kind")   not used
     ds:str = match.group("ds")
     model:str = match.group("model")
     noniid:str = match.group("noniid")
@@ -249,13 +267,12 @@ def log_name_to_wandb(logname:str) -> str:
 
     return f"{ds}_{model}_{noniid}_{seed}"
 
-
-def print_running_exps_table(launched_exps: dict[str, int]) -> None:
+def print_running_exps_table(launched_exps: dict[str, int], local: str="") -> None:
     """
     Prints a table with the experiments that are still running and their current running time.
     """
     if launched_exps["running"] > 0:
-        running_exps: list[str] = glob.glob("logs/*.run")
+        running_exps: list[str] = glob.glob(f"logs/ijcnn{local}exps*.run")
         running_times: list[timedelta] = list(
             map(lambda exp: get_elapsed(exp), running_exps))
 
@@ -389,7 +406,7 @@ def results_ranks(by_all: bool = typer.Option(False, help="Print a rank table fo
 @app.command()
 def stats(verbose:bool=False) -> None:
     """
-    Prints statistics about the experiments to be generated.
+    Prints statistics about the experiments.
 
     If verbose is True, then the list of skipped experiments is printed to stdout.
     """    
@@ -402,6 +419,25 @@ def stats(verbose:bool=False) -> None:
     print_general_stats(experiments, skipped, launched_exps)
     print_failed_exps_table(launched_exps)
     print_running_exps_table(launched_exps)
+    print_progress_bar(experiments, launched_exps)
+
+
+@app.command()
+def lstats(verbose:bool=False) -> None:
+    """
+    Prints statistics about the local experiments.
+
+    If verbose is True, then the list of skipped experiments is printed to stdout.
+    """
+    experiments: list[ExpDescription]
+    skipped: list[ExpDescription]
+
+    experiments, skipped = local_experiment_list(verbose)
+    launched_exps: dict[str, int] = local_launched_exps_stats()
+
+    print_general_stats(experiments, skipped, launched_exps)
+    print_failed_exps_table(launched_exps, local="local")
+    print_running_exps_table(launched_exps, local="local")
     print_progress_bar(experiments, launched_exps)
 
 
