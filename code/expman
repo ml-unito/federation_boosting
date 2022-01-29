@@ -1,0 +1,475 @@
+#!/usr/bin/env python3
+
+import itertools
+from unittest import skip
+import rich
+import typer
+import os
+from datetime import datetime, timedelta
+import regex as re
+
+from typing import Tuple
+
+from rich.console import Console
+from rich.markdown import Markdown
+from rich.padding import Padding
+from rich.columns import Columns
+from rich.panel import Panel
+from rich.table import Table
+from rich.progress import track
+from rich.progress import Progress, TaskID
+import rich.traceback as traceback
+
+import glob
+from itertools import groupby
+import wandb
+from copy import deepcopy
+import pandas as pd
+
+from wandb.apis.public import File
+
+from exputils import *
+from rankscounter import RanksCounter
+
+traceback.install()
+
+
+# 
+# RANKS COMMAND HELPER FUNCTIONS
+# 
+
+
+def exp_iter(runs,console):
+    """
+    Generator that iterates over runs yielding ds, skw, model, f1_avg for each run
+    """
+    exps_by_skw = groupby(
+        runs, lambda r: r.config["non_iidness"] + "|" + r.config["dataset"])
+
+    for skw_ds, exps in exps_by_skw:
+        skw, ds = skw_ds.split("|")
+
+        exps = list(exps)
+        model_groups = groupby(exps, lambda r: r.config["model"])
+
+        try:
+            for model, runs in model_groups:
+                f1s = [run.summary["test"]["f1"] for run in runs]
+                f1_avg = sum(f1s) / len(f1s)
+
+                yield(ds, skw, model, f1_avg)
+        except KeyError as e:
+            console.print(
+                f"Error retrieving key:{e}  in exp: {ds}, {skw}, {model}")
+
+
+def wandb_runs_to_dataframe(console):
+    """
+    Connects to wandb and returns a pandas dataframe with all runs
+    """
+    api: wandb.Api = wandb.Api()
+    entity:str
+    project:str 
+
+    entity, project = "mlgroup", "FederatedAdaboost "
+    runs = list(api.runs(entity + "/" + project, filters={"tags": "IJCNN"}))
+
+    runs = sorted(runs, key=lambda x: x.config["non_iidness"] + x.config["dataset"] + x.config["model"])
+    data = pd.DataFrame(columns=["Dataset", "Skw", "Model", "F1"])
+
+    for ds, skw, model, f1_avg in exp_iter(runs, console):
+        data = data.append({"Dataset": ds, "Skw": skw, "Model": model, "F1": f1_avg}, ignore_index=True)
+
+    return data
+
+# 
+# GENERATE MAKEFILES HELPER FUNCTIONS
+# 
+
+def generate_exp_targets(test_run_opt: str, f: File, verbose=False) -> None:
+    """
+    Generates the Makefile targets for the experiments that needs to be done.
+    """
+    experiments: list[ExpDescription]
+    experiments, _ = experiment_list(verbose)
+
+    experiment_tags: list[str] = []
+    
+    for experiment in track(experiments, "Generating experiment targets"):
+        ds: str
+        seed: int
+        model: str
+        noniid: str
+        ds, seed, model, noniid = experiment
+
+        experiment_tags.append(f"logs/ijcnnexps_ds_{ds}_model_{model}_noniid_{noniid}_seed_{seed}.log")
+        print(f"{experiment_tags[-1]}:", file=f)
+        print(f"\tpython3 ijcnn_exps.py run --seed={seed} --n-clients=10 --model={model} --non-iidness={noniid} --tags=IJCNN {test_run_opt} {ds}", file=f)
+
+    exp_tags_str: str = " ".join(experiment_tags)
+    print(f"all:{exp_tags_str}", file=f)
+
+    print(f"clean_all_logs:", file=f)
+    print(f"\trm -f logs/*.log", file=f)
+    print(f"\trm -f logs/*.err", file=f)
+
+def generate_localexp_targets(test_run_opt: str, f: File, verbose=False) -> None:
+    experiments, _ = local_experiment_list(verbose)
+    experiment_tags = []
+
+    for experiment in track(experiments, "Generating local experiment targets"):
+        client, skw, seed = experiment
+
+        experiment_tags.append(f"logs/ijcnnlocalexps_ds_pendigits_model_localsamme{client}_noniid_{skw}_seed_{seed}.log")
+        print(f"{experiment_tags[-1]}:", file=f)
+        print(f"\tpython3 ijcnn_exps.py  run-samme-local --client={client} --seed={seed} --n-clients=10 --non-iidness={skw} --tags=IJCNN-local {test_run_opt} pendigits", file=f)
+
+    exp_tags_str: str = " ".join(experiment_tags)
+    print(f"all_local_exps:{exp_tags_str}", file=f)
+
+
+def generate_plot_targets(f:File, verbose=False) -> None:
+    """
+    Generates the Makefile targets for the plots that needs to be done.
+    """
+    pl = plotlist(verbose)
+    filenames = []
+
+    for ds, noniidness in track(pl, "Generating plot targets"):
+        fname = plot_fname(ds, noniidness)
+        print(f"{fname}:", file=f)
+        print(f"\tpython3 mkgraphs.py plot {ds} {noniidness}", file=f)
+
+        filenames.append(fname)
+
+    filename_str = " ".join(filenames)
+    print(f"all_plots:{filename_str}", file=f)
+    print("clean_all_plots:", file=f)
+    print("\tfind images -name \"*.pdf\" -exec rm {} \;", file=f)
+    print("copy_plots_to_paper:", file=f)
+    print("\tfind images \( -name \"*kr_vs_kp*.pdf\" -or -name \"*letter*.pdf\" -or -name \"*segmentation*.pdf\" -or -name \"*adult*.pdf\" -or -name \"*pendigits*.pdf\" \) -exec cp {} ../papers/2022-ijcnn/images/ \;", file=f)
+    print("create_tikz_files: cache/*", file=f)
+    print("\tfind cache -name \"*.pickle\" -print -exec python3 tocsv.py {} \;", file=f)
+    
+# 
+#   STATS COMMAND HELPER FUNCTIONS
+# 
+
+def launched_exps_stats() -> dict[str,int]:
+    """
+    Returns statistics about the experiments that have been launched. 
+    The statistics are returned as a dictionary with the following keys:
+        "completed": the number of experiments that have been launched and completed
+        "failed": the number of experiments that have been launched and failed
+        "running": the number of experiments that have been launched and are still running
+    """
+    completed: list[str] = glob.glob("logs/ijcnnexps*.log")
+    failed: list[str] = glob.glob("logs/ijcnnexps*.err")
+    running: list[str] = glob.glob("logs/ijcnnexps*.run")
+
+    return { "completed": len(completed), "failed": len(failed), "running": len(running) }
+
+
+def local_launched_exps_stats() -> dict[str, int]:
+    """
+    Returns statistics about the experiments that have been launched. 
+    The statistics are returned as a dictionary with the following keys:
+        "completed": the number of experiments that have been launched and completed
+        "failed": the number of experiments that have been launched and failed
+        "running": the number of experiments that have been launched and are still running
+    """
+    completed: list[str] = glob.glob("logs/ijcnnlocalexps*.log")
+    failed: list[str] = glob.glob("logs/ijcnnlocalexps*.err")
+    running: list[str] = glob.glob("logs/ijcnnlocalexps*.run")
+
+    return {"completed": len(completed), "failed": len(failed), "running": len(running)}
+
+
+def get_elapsed(exp:str) -> timedelta:
+    """
+    Returns the elapsed time for the experiment exp. 
+    Exp must be a running experiment.
+    """
+    start_time:datetime = datetime.fromtimestamp(os.path.getmtime(exp))
+    curr_time:datetime = datetime.now()
+
+    delta:timedelta = curr_time - start_time
+    return delta
+
+
+def print_general_stats(experiments: list[ExpDescription], skipped: list[ExpDescription], launched_exps: dict[str, int]) -> None:
+    """
+    Prints general statistics about the experiments that have been launched.
+    Statistics include:
+        - the number of experiments that have been generated
+        - the number of experiments that have been skipped
+        - the total number of experiments (generated + skipped)
+
+        - the number of experiments that completed
+        - the number of experiments that failed
+        - the number of experiments that are still running
+        - the total number of experiments that have been launched
+    """
+    
+    total_exps_md: str = f"""
+# Total experiments stats 
+- Generated: {len(experiments)}
+- Skipped: {len(skipped)}
+- **Total**: {len(experiments) + len(skipped)}
+"""
+    launched_exps_md: str = f"""
+# Launched experiments stats
+- *Running*: {launched_exps["running"]}    
+- Completed: {launched_exps["completed"]}
+- **Failed**: {launched_exps["failed"]}
+- **Total**: {launched_exps["completed"] + launched_exps["failed"] + launched_exps["running"]}
+"""
+
+    panel1: Panel = Panel.fit(Markdown(total_exps_md), width=40)
+    panel2: Panel = Panel.fit(Markdown(launched_exps_md), width=40)
+
+    console.print(Columns([panel1, panel2]))
+
+
+def print_failed_exps_table(launched_exps: dict[str, int], local: str="") -> None:
+    """
+    Prints a table with the experiments that failed.
+    """
+    if launched_exps["failed"] > 0:
+        failed_exps: list[str] = glob.glob(f"logs/ijcnn{local}exps*.err")
+        table: Table = Table(title="[bold red]Failed experiments[/]")
+        table.add_column("#", justify="right", style="bold")
+        table.add_column("Experiment", justify="left", style="magenta")
+        table.add_column("WANDB name", justify="right", style="green")
+
+        for i, exp in enumerate(failed_exps):
+            table.add_row(str(i), exp, log_name_to_wandb(exp))
+
+        console.print(table)
+
+# Use a regex to parse log names in the format "logs/ijcnnexps_ds_<ds>_model_<model>_noniid_<noniid>_seed_<seed>.log"
+# to extract the dataset, model, noniid and seed and return them in the format "<ds>_<model>_<noniid>_<seed>"
+def log_name_to_wandb(logname:str) -> str:
+    """
+    Returns the name of the experiment in wandb format.
+    logname: the name of the experiment in log format.
+    """
+    regexp = re.compile(r"logs/ijcnn(?P<kind>exps|localexps)_ds_(?P<ds>\w+)_model_(?P<model>(\w|\.)+)_noniid_(?P<noniid>\w+)_seed_(?P<seed>\d+).(run|log|err)")
+    match = regexp.match(logname)
+    if match is None:
+        raise ValueError(f"The log name {logname} does not match the expected format")
+    
+    # _ = match.group("kind")   not used
+    ds:str = match.group("ds")
+    model:str = match.group("model")
+    noniid:str = match.group("noniid")
+    seed:int = int(match.group("seed"))
+
+    return f"{ds}_{model}_{noniid}_{seed}"
+
+def print_running_exps_table(launched_exps: dict[str, int], local: str="") -> None:
+    """
+    Prints a table with the experiments that are still running and their current running time.
+    """
+    if launched_exps["running"] > 0:
+        running_exps: list[str] = glob.glob(f"logs/ijcnn{local}exps*.run")
+        running_times: list[timedelta] = list(
+            map(lambda exp: get_elapsed(exp), running_exps))
+
+        running_info = list(zip(running_exps, running_times))
+        running_info = sorted(running_info, key=lambda x: x[1])
+
+        table: Table = Table(title="[bold green]Running experiments[/]")
+        table.add_column("#", justify="right", style="bold")
+        table.add_column("Experiment", justify="left", style="magenta")
+        table.add_column("WANDB name", justify="right", style="green")
+        table.add_column("Elapsed time", justify="right", style="yellow")
+
+        for i, exp_info in enumerate(running_info):
+            delta_time: timedelta = exp_info[1]
+            hours: int = delta_time.seconds // 3600
+            minutes: int = (delta_time.seconds % 3600) // 60
+            seconds: int = delta_time.seconds % 60
+
+            table.add_row(str(i), exp_info[0], log_name_to_wandb(exp_info[0]),
+                          f"{hours}h {minutes}m {seconds}s")
+
+        console.print(table)
+
+
+def print_progress_bar(experiments: list[ExpDescription], launched_exps: dict[str, int]) -> None:
+    """
+    Prints a progress bar based on the number of experiments that have completed (w.r.t., the total number of
+    experiments generated and not skipped).
+    """
+    with Progress() as progress:
+
+        task1: TaskID = progress.add_task(
+            "[red]Exp progress:", total=len(experiments))
+
+        progress.update(task1, advance=launched_exps["completed"])
+
+
+# 
+# COMMANDS
+#
+
+@app.command()
+def f1_averages():
+    """
+    Prints F1 averages (globally and by skw)
+    """
+    df = wandb_runs_to_dataframe(console)
+
+    globtable = Table(title="[bold red]All Skws[/]")
+    globtable.add_column("Model", justify="left", style="red")
+    globtable.add_column("E[F1]", justify="right", style="bold")
+
+    modelf1s = []
+    for model in ["FedAlgorithms.samme", "FedAlgorithms.preweaksamme", "FedAlgorithms.distsamme", "FedAlgorithms.adaboost"]:
+        modelf1s.append([model, df[df.Model == model].F1.mean()])
+    
+    modelf1s = sorted(modelf1s, key=lambda x: x[1], reverse=True)
+    for modelf1 in modelf1s:
+        globtable.add_row(hm(modelf1[0]), f"{modelf1[1]:.3f}")
+
+    console.print(globtable)
+
+    tables = []
+    for skw, group in df.groupby(["Skw"]):
+        table = Table(title=f"[bold cyan]{skw}[/]")
+        table.add_column("Model", justify="left", style="cyan")
+        table.add_column("E[F1]", justify="right", style="green")
+
+        modelf1s = []
+        for model, subgroup in group.groupby(["Model"]):
+            modelf1s.append([model, subgroup.F1.mean()])
+
+        modelf1s = sorted(modelf1s, key=lambda x: x[1], reverse=True)
+        for modelf1 in modelf1s:
+            table.add_row(hm(modelf1[0]), f"{modelf1[1]:.3f}")
+
+        tables.append(table)
+
+    console.print(Panel(Columns(tables), title="F1 Averages by Skw", border_style="cyan"))
+
+
+
+
+@app.command("ranks")
+def results_ranks(by_all: bool = typer.Option(False, help="Print a rank table for each dataset/skw combination"),
+                  by_skewness: bool = typer.Option(
+                      False, help="Print a rank table for each skewness"),
+                  by_algorithm: bool = typer.Option(
+                      False, help="Print a rank table for each algorithm"),
+                  save_to: str = typer.Option(
+                      None, help="Save the ranks in html format to the given file"),
+                  omit_models: str = typer.Option(None, help="Comma separated list of models that should be omitted from the rank tables."),
+                  all: bool = typer.Option(False, help="Equivalent to --by-all --by-skewness --by-algorithm")):
+    """
+    Print tables about rankings of the algorithms.
+    """
+
+    console: Console = Console(record=not save_to is None)
+
+    if all:
+        by_all = True
+        by_skewness = True
+        by_algorithm = True
+
+    df = wandb_runs_to_dataframe(console)
+
+    if omit_models:
+        for model in omit_models.split(","):
+            df = df[df.Model != model]
+
+    grouped = df.groupby(["Dataset", "Skw"])
+
+    rc = RanksCounter(console)
+
+    if by_algorithm or by_skewness:
+        grouped.apply(rc.add_rank)
+
+    if by_algorithm:
+        rc.print_global_rank()
+
+    if by_skewness:
+        rc.print_skw_ranks()
+
+    if by_all:
+        grouped.apply(rc.add_rank_table)
+        rc.print_rank_tables()
+
+    if save_to:
+        console.save_html(save_to)
+
+@app.command()
+def stats(verbose:bool=False) -> None:
+    """
+    Prints statistics about the experiments.
+
+    If verbose is True, then the list of skipped experiments is printed to stdout.
+    """    
+    experiments:list[ExpDescription]
+    skipped:list[ExpDescription]
+
+    experiments, skipped = experiment_list(verbose)
+    launched_exps:dict[str,int] = launched_exps_stats()
+
+    print_general_stats(experiments, skipped, launched_exps)
+    print_failed_exps_table(launched_exps)
+    print_running_exps_table(launched_exps)
+    print_progress_bar(experiments, launched_exps)
+
+
+@app.command()
+def lstats(verbose:bool=False) -> None:
+    """
+    Prints statistics about the local experiments.
+
+    If verbose is True, then the list of skipped experiments is printed to stdout.
+    """
+    experiments: list[ExpDescription]
+    skipped: list[ExpDescription]
+
+    experiments, skipped = local_experiment_list(verbose)
+    launched_exps: dict[str, int] = local_launched_exps_stats()
+
+    print_general_stats(experiments, skipped, launched_exps)
+    print_failed_exps_table(launched_exps, local="local")
+    print_running_exps_table(launched_exps, local="local")
+    print_progress_bar(experiments, launched_exps)
+
+
+
+@app.command()
+def generate_makefiles(outfile:str=typer.Argument("Makefile"),
+                        exps:bool=typer.Option(True, help="Generate entries for the experiments"),
+                        plots:bool=typer.Option(True, help="Generate entries for the plots"),
+                        verbose:bool=False, 
+                        test_run:bool=True) -> None:
+    """
+    Generates a Makefile allowing to launch the experiments presented in  (Polato, Esposito, et al. 2022)
+
+    If verbose is True, then the list of skipped experiments is printed to stdout.
+    If test_run is True, then the Makefile is generated for a test run (i.e., the experiments will be
+    configured to *not* connect to wandb and the number of weak learners will be set to 1).
+    """
+
+    test_run_opt:str = "--test-run" if test_run else "--no-test-run"
+
+    with open(outfile, "w") as f:
+        if exps:
+            generate_exp_targets(test_run_opt, f, verbose=verbose)
+            generate_localexp_targets(test_run_opt, f, verbose=verbose)
+        
+        if plots:
+            generate_plot_targets(f, verbose=verbose)
+
+
+# 
+# MAIN
+# 
+
+if __name__ == '__main__':
+    app()

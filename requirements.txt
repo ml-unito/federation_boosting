@@ -1,7 +1,0 @@
-tqdm==4.59.0
-matplotlib==3.3.4
-pandas==1.2.4
-numpy==1.19.2
-dload==0.6
-scikit_learn==1.0
-wandb
