@@ -2,7 +2,31 @@
 [![version](https://img.shields.io/badge/python-3.8|3.9-blue?style=for-the-badge)]()
 [![open-source](https://img.shields.io/badge/open%20source-blue?style=for-the-badge&logo=github&color=123456)](https://github.com/makgyver/)
 
-# Federated Adaboost
+# Programs and workflow
+
+**`ijcnn_exps.py`**: performs a single experiment
+**`expman`**: this experiment manager handle a number of tasks useful to organize and work with the experiments.
+  - generates the makefile used to launch all the experiments
+  - generates statistics about the experiments (how many are running, how many ended with errors, etc.)
+  - generates the ranking tables
+
+## Launching the experimentation
+
+This is a two steps process:
+  1. the Makefile needs to be generated using:
+      ```
+      ./expman generate-makefiles --no-test-run 
+      ```
+  2. the experiments can now be launched with:
+      > make all
+
+## Producing seaborn plots
+
+Once the experiments completed seaborn plots can be generated using `mkgraphs.py`. 
+
+
+
+<!-- # Federated Adaboost
 
 Currently, the program tests Distboost and Preweak [[1]](#1) and compare their performance with a standard Adaboost (scikit-learn implementation + custom implementation).
 
@@ -48,4 +72,4 @@ Options:
 
 ## References
 <a id="1">[1]</a>
-J. Cooper and L. Reyzin, "Improved algorithms for distributed boosting," 2017 55th Annual Allerton Conference on Communication, Control, and Computing (Allerton), 2017, pp. 806-813, doi: 10.1109/ALLERTON.2017.8262822.
+J. Cooper and L. Reyzin, "Improved algorithms for distributed boosting," 2017 55th Annual Allerton Conference on Communication, Control, and Computing (Allerton), 2017, pp. 806-813, doi: 10.1109/ALLERTON.2017.8262822. -->
