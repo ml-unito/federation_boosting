@@ -34,7 +34,7 @@ def plot_fname(dataset: str, noniidness: str) -> str:
                 "Noniidness.covariate_shift": "covariate_shift" }
     return f"images/skw/{skw_maps[noniidness]}/f1_{dataset}_{noniidness}.pdf"
 
-def plotlist(verbose=False) -> list[str, str]:
+def plotlist(verbose=False) -> list[str]:
     def plot_to_skip(exp):
         ds, iidness = exp
         return experiment_to_skip(ds, None, None, iidness, verbose)
