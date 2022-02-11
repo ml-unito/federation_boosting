@@ -29,6 +29,7 @@ class MulticlassBoosting(Boosting):
         return np.argmax(y_pred, axis=1)
 
 
+# Centralized Multiclass AdaBoost
 class Samme(MulticlassBoosting):
     def fit(self: Samme,
             X: np.ndarray,
@@ -63,7 +64,8 @@ class Samme(MulticlassBoosting):
                 yield self
 
 
-# Support class for Distboost
+# Support class for Distboost: 
+# commitee of classifiers, i.e., weak hypothesis of DistBoost/DistSamme
 class Hyp():
     def __init__(self: Hyp,
                  ht: List[ClassifierMixin],
@@ -93,11 +95,13 @@ class DistSamme(MulticlassBoosting):
         self.K = len(set(np.concatenate(y)))
         cks = set(checkpoints) if checkpoints is not None else [self.n_clf]
         n_samples = sum([x.shape[0] for x in X])
+        # Distribution over examples for each client. Init: uniform
         D = [np.full(x.shape[0], (1 / n_samples)) for x in X]
         self.clfs = []
         self.alpha = []
         for t in range(self.n_clf):
             ht = []
+            # Client-side
             for j, X_ in enumerate(X):
                 clf = deepcopy(self.clf_class)
                 ids = choice(X_.shape[0], size=X_.shape[0],
@@ -105,12 +109,14 @@ class DistSamme(MulticlassBoosting):
                 X__, y__ = X_[ids], y[j][ids]
                 clf.fit(X__, y__)
                 ht.append(clf)
-
+            
+            # Server-side
             H = Hyp(ht, self.K)
             self.clfs.append(H)
 
             min_error = 0
             predictions = []
+            # This is computed partially on the clients and aggregated on the server 
             for j, X_ in enumerate(X):
                 predictions.append(H.predict(X_))
                 # / np.sum(D[j])
@@ -142,6 +148,7 @@ class PreweakSamme(MulticlassBoosting):
         self.K = len(set(np.concatenate(y)))
         cks = set(checkpoints) if checkpoints is not None else [self.n_clf]
         ht = []
+        # Client-side
         for j, X_ in enumerate(X):
             clf = Samme(self.n_clf, self.clf_class)
             for h in clf.fit(X_, y[j], checkpoints):
@@ -164,6 +171,7 @@ class PreweakSamme(MulticlassBoosting):
 
             min_error = 1000
             top_model = None
+            # This is computed partially on the clients and aggregated on the server 
             for h, hpred in ht_pred.items():
                 err = np.sum(D[y__ != hpred[ids]])  # / np.sum(D)
                 if err < min_error:
@@ -214,6 +222,7 @@ class AdaboostF1(MulticlassBoosting):
 
         for t in range(self.n_clf):
             fed_clfs = []
+            # Client-side
             for j, X__ in enumerate(X):
                 D_ = self.federated_dist(D, X, j)
                 n_samples_ = X__.shape[0]
@@ -228,6 +237,7 @@ class AdaboostF1(MulticlassBoosting):
             best_clf = fed_clfs[np.argmin(errors)]
             best_error = errors[np.argmin(errors)]
 
+            # This is computed partially on the clients and aggregated on the server 
             predictions = best_clf.predict(X_)
 
             # kind of additive smoothing
