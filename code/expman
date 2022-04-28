@@ -462,7 +462,7 @@ def generate_makefiles(outfile:str=typer.Argument("Makefile"),
     with open(outfile, "w") as f:
         if exps:
             generate_exp_targets(test_run_opt, f, verbose=verbose)
-            generate_localexp_targets(test_run_opt, f, dataset, verbose=verbose)
+            generate_localexp_targets(test_run_opt, f, dataset_for_local_exps, verbose=verbose)
         
         if plots:
             generate_plot_targets(f, verbose=verbose)
