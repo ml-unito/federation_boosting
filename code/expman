@@ -113,16 +113,16 @@ def generate_exp_targets(test_run_opt: str, f: File, verbose=False) -> None:
     print(f"\trm -f logs/*.log", file=f)
     print(f"\trm -f logs/*.err", file=f)
 
-def generate_localexp_targets(test_run_opt: str, f: File, verbose=False) -> None:
+def generate_localexp_targets(test_run_opt: str, f: File, dataset: str, verbose=False) -> None:
     experiments, _ = local_experiment_list(verbose)
     experiment_tags = []
 
     for experiment in track(experiments, "Generating local experiment targets"):
         client, skw, seed = experiment
 
-        experiment_tags.append(f"logs/ijcnnlocalexps_ds_pendigits_model_localsamme{client}_noniid_{skw}_seed_{seed}.log")
+        experiment_tags.append(f"logs/ijcnnlocalexps_ds_{dataset}_model_localsamme{client}_noniid_{skw}_seed_{seed}.log")
         print(f"{experiment_tags[-1]}:", file=f)
-        print(f"\tpython3 ijcnn_exps.py  run-samme-local --client={client} --seed={seed} --n-clients=10 --non-iidness={skw} --tags=IJCNN-local {test_run_opt} pendigits", file=f)
+        print(f"\tpython3 ijcnn_exps.py  run-samme-local --client={client} --seed={seed} --n-clients=10 --non-iidness={skw} --tags=IJCNN-local {test_run_opt} {dataset}", file=f)
 
     exp_tags_str: str = " ".join(experiment_tags)
     print(f"all_local_exps:{exp_tags_str}", file=f)
@@ -446,6 +446,7 @@ def lstats(verbose:bool=False) -> None:
 def generate_makefiles(outfile:str=typer.Argument("Makefile"),
                         exps:bool=typer.Option(True, help="Generate entries for the experiments"),
                         plots:bool=typer.Option(True, help="Generate entries for the plots"),
+                        dataset_for_local_exps=typer.Option("pendigits", help="Dataset to use for local experiments"),
                         verbose:bool=False, 
                         test_run:bool=True) -> None:
     """
@@ -461,7 +462,7 @@ def generate_makefiles(outfile:str=typer.Argument("Makefile"),
     with open(outfile, "w") as f:
         if exps:
             generate_exp_targets(test_run_opt, f, verbose=verbose)
-            generate_localexp_targets(test_run_opt, f, verbose=verbose)
+            generate_localexp_targets(test_run_opt, f, dataset, verbose=verbose)
         
         if plots:
             generate_plot_targets(f, verbose=verbose)
