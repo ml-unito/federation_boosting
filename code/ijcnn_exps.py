@@ -14,6 +14,7 @@ from fed_adaboost import split_dataset
 from pathlib import Path
 import os
 import dload
+import json
 from numpy.random import permutation
 
 
@@ -179,7 +180,7 @@ def scale_data(normalize, X_train, X_test):
 
     return X_train, X_test
 
-def execute_experiment(dataset, seed, test_size, n_clients, model, normalize, non_iidness, tags, test_run):
+def execute_experiment(dataset, seed, test_size, n_clients, model, normalize, non_iidness, tags, test_run, wandb_config):
     options = deepcopy(locals())
 
     WEAK_LEARNER = DecisionTreeClassifier(random_state=seed, max_leaf_nodes=10)
@@ -189,9 +190,9 @@ def execute_experiment(dataset, seed, test_size, n_clients, model, normalize, no
 
     console.log("Configuration:", options, style="bold green")
 
-    if not test_run:
-        wandb.init(project='FederatedAdaboost',
-                    entity='mlgroup',
+    if not test_run and wandb_config:
+        wandb.init(project=wandb_config["project"],
+                    entity=wandb_config['entity'],
                     name=f"{dataset.value}_{model.value}_{non_iidness.value}_{seed}",
                     tags=TAGS,
                     config=options)
@@ -235,12 +236,12 @@ def execute_experiment(dataset, seed, test_size, n_clients, model, normalize, no
             }
         }
 
-        if not test_run:
+        if not test_run and wandb_config:
             wandb.log(log_dict, step=step)
         else:
             console.log(log_dict)
 
-def execute_local_samme(dataset, client, seed, test_size, n_clients, non_iidness, tags, test_run):
+def execute_local_samme(dataset, client, seed, test_size, n_clients, non_iidness, tags, test_run, wandb_config):
     options = deepcopy(locals())
 
     WEAK_LEARNER = DecisionTreeClassifier(random_state=seed, max_leaf_nodes=10)
@@ -250,9 +251,9 @@ def execute_local_samme(dataset, client, seed, test_size, n_clients, non_iidness
 
     console.log("Configuration:", options, style="bold green")
 
-    if not test_run:
-        wandb.init(project='FederatedAdaboost',
-                    entity='mlgroup',
+    if not test_run and wandb_config:
+        wandb.init(project=wandb_config["project"],
+                   entity=wandb_config['entity'],
                     name=f"{dataset.value}_localsamme{client}_{non_iidness.value}_{seed}",
                     tags=TAGS,
                     config=options)
@@ -295,7 +296,7 @@ def execute_local_samme(dataset, client, seed, test_size, n_clients, non_iidness
             }
         }
 
-        if not test_run:
+        if not test_run and wandb_config:
             wandb.log(log_dict, step=step)
         else:
             console.log(log_dict)
@@ -314,7 +315,8 @@ def run_samme_local(dataset: Datasets = typer.Argument(...),
                                 help="Number of clients (>= 1)"),
         non_iidness:Noniidness=typer.Option("uniform", help="Whether the instances have to be distributed in a non-iid way."),
         tags:str=typer.Option("", help="list of comma separated tags to be added in the wandb lod"),
-        test_run:bool=typer.Option(True, help="Launch the script without WANDB support and training a single WL")):
+        test_run:bool=typer.Option(True, help="Launch the script without WANDB support and training a single WL"),
+        wandb_config_file: str = typer.Option(None, help="WANDB configuration file")):
 
     filename = f"logs/ijcnnlocalexps_ds_{dataset.value}_model_localsamme{client}_noniid_{non_iidness.value}_seed_{seed}"
     run_file = filename+".run"
@@ -323,8 +325,14 @@ def run_samme_local(dataset: Datasets = typer.Argument(...),
 
     Path(run_file).touch()
 
+    if wandb_config_file:
+        with open(wandb_config_file) as f:
+            wandb_config = json.load(f)
+    else:
+        wandb_config = None
+
     try:
-        execute_local_samme(dataset, client, seed, test_size, n_clients, non_iidness, tags, test_run)
+        execute_local_samme(dataset, client, seed, test_size, n_clients, non_iidness, tags, test_run, wandb_config)
 
         console.log("Training complete!")
         console.save_text(log_file)
@@ -348,7 +356,8 @@ def run(dataset: Datasets = typer.Argument(...),
         normalize:bool=typer.Option(False, help="Whether the instances has to be normalized or not"),                                
         non_iidness:Noniidness=typer.Option("uniform", help="Whether the instances have to be distributed in a non-iid way."),
         tags:str=typer.Option("", help="list of comma separated tags to be added in the wandb lod"),
-        test_run:bool=typer.Option(True, help="Launch the script without WANDB support and training a single WL"),):
+        test_run:bool=typer.Option(True, help="Launch the script without WANDB support and training a single WL"),
+        wandb_config_file:str=typer.Option(None, help="WANDB configuration file")):
     """
     Testing Samme, Distboost and Preweak adaptation of Samme (Cooper et al. 2017) "
     as well as Adaboost.F1 (Polato, Esposito, et al. 2022) for multi-class classification. "
@@ -361,8 +370,14 @@ def run(dataset: Datasets = typer.Argument(...),
 
     Path(run_file).touch()
 
+    if wandb_config_file:
+        with open(wandb_config_file) as f:
+            wandb_config = json.load(f)
+    else:
+        wandb_config = None
+
     try:
-        execute_experiment(dataset, seed, test_size, n_clients, model, normalize, non_iidness, tags, test_run)
+        execute_experiment(dataset, seed, test_size, n_clients, model, normalize, non_iidness, tags, test_run, wandb_config)
 
         console.log("Training complete!")
         console.save_text(log_file)

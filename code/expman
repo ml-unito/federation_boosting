@@ -86,7 +86,7 @@ def wandb_runs_to_dataframe(console):
 # GENERATE MAKEFILES HELPER FUNCTIONS
 # 
 
-def generate_exp_targets(test_run_opt: str, f: File, verbose=False) -> None:
+def generate_exp_targets(test_run_opt: str, f: File, wandb_config,  verbose=False) -> None:
     """
     Generates the Makefile targets for the experiments that needs to be done.
     """
@@ -104,7 +104,7 @@ def generate_exp_targets(test_run_opt: str, f: File, verbose=False) -> None:
 
         experiment_tags.append(f"logs/ijcnnexps_ds_{ds}_model_{model}_noniid_{noniid}_seed_{seed}.log")
         print(f"{experiment_tags[-1]}:", file=f)
-        print(f"\tpython3 ijcnn_exps.py run --seed={seed} --n-clients=10 --model={model} --non-iidness={noniid} --tags=IJCNN {test_run_opt} {ds}", file=f)
+        print(f"\tpython3 ijcnn_exps.py run --seed={seed} --n-clients=10 --model={model} --non-iidness={noniid} --tags=IJCNN {test_run_opt} {wandb_config} {ds}", file=f)
 
     exp_tags_str: str = " ".join(experiment_tags)
     print(f"all:{exp_tags_str}", file=f)
@@ -113,7 +113,7 @@ def generate_exp_targets(test_run_opt: str, f: File, verbose=False) -> None:
     print(f"\trm -f logs/*.log", file=f)
     print(f"\trm -f logs/*.err", file=f)
 
-def generate_localexp_targets(test_run_opt: str, f: File, dataset: str, verbose=False) -> None:
+def generate_localexp_targets(test_run_opt: str, f: File, dataset: str, wandb_config, verbose=False) -> None:
     experiments, _ = local_experiment_list(verbose)
     experiment_tags = []
 
@@ -122,7 +122,7 @@ def generate_localexp_targets(test_run_opt: str, f: File, dataset: str, verbose=
 
         experiment_tags.append(f"logs/ijcnnlocalexps_ds_{dataset}_model_localsamme{client}_noniid_{skw}_seed_{seed}.log")
         print(f"{experiment_tags[-1]}:", file=f)
-        print(f"\tpython3 ijcnn_exps.py  run-samme-local --client={client} --seed={seed} --n-clients=10 --non-iidness={skw} --tags=IJCNN-local {test_run_opt} {dataset}", file=f)
+        print(f"\tpython3 ijcnn_exps.py  run-samme-local --client={client} --seed={seed} --n-clients=10 --non-iidness={skw} --tags=IJCNN-local {test_run_opt} {wandb_config} {dataset}", file=f)
 
     exp_tags_str: str = " ".join(experiment_tags)
     print(f"all_local_exps:{exp_tags_str}", file=f)
@@ -447,6 +447,7 @@ def generate_makefiles(outfile:str=typer.Argument("Makefile"),
                         exps:bool=typer.Option(True, help="Generate entries for the experiments"),
                         plots:bool=typer.Option(True, help="Generate entries for the plots"),
                         dataset_for_local_exps=typer.Option("pendigits", help="Dataset to use for local experiments"),
+                        wandb_config_file:str=typer.Option(None, help="Path to the wandb config file"),
                         verbose:bool=False, 
                         test_run:bool=True) -> None:
     """
@@ -457,12 +458,17 @@ def generate_makefiles(outfile:str=typer.Argument("Makefile"),
     configured to *not* connect to wandb and the number of weak learners will be set to 1).
     """
 
+    if wandb_config_file is None:
+        wandb_config = ""
+    else:
+        wandb_config = f"--wandb-config-file={wandb_config_file}"
+
     test_run_opt:str = "--test-run" if test_run else "--no-test-run"
 
     with open(outfile, "w") as f:
         if exps:
-            generate_exp_targets(test_run_opt, f, verbose=verbose)
-            generate_localexp_targets(test_run_opt, f, dataset_for_local_exps, verbose=verbose)
+            generate_exp_targets(test_run_opt, f, wandb_config, verbose=verbose)
+            generate_localexp_targets(test_run_opt, f, dataset_for_local_exps, wandb_config, verbose=verbose)
         
         if plots:
             generate_plot_targets(f, verbose=verbose)
