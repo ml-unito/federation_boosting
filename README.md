@@ -6,7 +6,7 @@ This repository contains the code developed for the paper "Boosting the Federati
       author    = {Mirko Polato and
                    Roberto Esposito and Marco Aldinucci},
       title     = {Boosting the Federation: Cross-Silo Federated Learning without Gradient Descent},
-      booktitle = {International Joint Conference on Neural Networks, {IJCNN} 2022, Verona,
+      booktitle = {International Joint Conference on Neural Networks, {IJCNN} 2022, Padova,
                    Italy, 18-23 July, 2010},
       pages     = {to appear},
       publisher = {{IEEE}},
