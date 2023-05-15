@@ -11,8 +11,8 @@ This repository contains the code developed for the paper "Boosting the Federati
       pages     = {to appear},
       publisher = {{IEEE}},
       year      = {2022},
-      url       = {to appear},
-      doi       = {to appear},
+      url       = {https://ieeexplore.ieee.org/abstract/document/9892284},
+      doi       = {10.1109/IJCNN55064.2022.9892284},
     }
 
 
